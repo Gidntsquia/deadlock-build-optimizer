@@ -83,7 +83,11 @@ export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
   const scored: Scored[] = pre.map(({ item, stat, eff, kit: k }) => {
     const pop = stat.matches / maxMatches;
     const shrunk = (stat.wins + K * meanWR) / (stat.matches + K);
-    const winLift = (shrunk - meanWR) * 10;
+    // Sample-size shrinkage does not remove selection bias: a late luxury item bought in 5% of games is
+    // bought in games that are already being won, and that bias does not shrink with more matches.
+    // The win rate is only an unbiased estimate of the item's effect when nearly everyone buys it, so
+    // the lift is credited in proportion to usage (100% usage: full lift; 5% usage: 5% of it).
+    const winLift = (shrunk - meanWR) * 10 * pop;
     const base =
       WEIGHTS.popularity * Math.sqrt(pop) + WEIGHTS.winLift * winLift +
       WEIGHTS.efficiency * (eff / effMax) + WEIGHTS.kit * (k / kitMax) +

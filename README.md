@@ -53,9 +53,9 @@ For each candidate item *i* (shopable, cost > 0, relative usage ≥ 3 %):
 
 ```
 score(i) = 1.0 · sqrt(pop)            pop     = matches_i / matches of the hero's most-bought item
-         + 1.0 · winLift               winLift = (shrunkWR_i − heroMeanWR) × 10
-         + 0.8 · eff / max(eff)        eff     = Σ_stat |value| · UNIT_VALUE[stat] · archetypeMult[stat] / cost
-         + 0.8 · kit / max(kit)        kit     = Σ_stat |value| · UNIT_VALUE[stat] · kitMult[stat]       / cost
+         + 1.0 · winLift               winLift = (shrunkWR_i − heroMeanWR) × 10 × pop
+         + 0.2 · eff / max(eff)        eff     = Σ_stat |value| · UNIT_VALUE[stat] · archetypeMult[stat] / cost
+         + 0.2 · kit / max(kit)        kit     = Σ_stat |value| · UNIT_VALUE[stat] · kitMult[stat]       / cost
          + 0.1 · [is active item]
          , × slotBias[archetype][slot]
          + 0.5 · synergy               synergy = mean pair win-lift (×10) with items already chosen (permutation-stats)
@@ -63,6 +63,9 @@ score(i) = 1.0 · sqrt(pop)            pop     = matches_i / matches of the hero
 
 * `shrunkWR = (wins + K·mean) / (matches + K)` with `K = max(200, 5 % of the top item's matches)`
   (Bayesian shrinkage; rare items regress to the hero mean instead of dominating on noisy win rates).
+  The lift is then multiplied by `pop`: shrinkage handles small samples, not selection bias. An item
+  bought in 5 % of games is bought in games that are already going well, and that bias does not shrink
+  with more matches, so its win rate is only trusted in proportion to how widely it is bought.
 * `UNIT_VALUE` (souls per stat unit, `stats.ts`) converts stat lines from the assets `properties` into a
   soul-equivalent so value-per-soul is comparable across tiers. Values are hand-set from tier-1 item prices.
 * `kitMult` (`kit.ts`) comes from the hero assets: number of ability properties that scale with
@@ -101,9 +104,9 @@ Results, single Recommended build, 30 matches each:
 
 | set | agreement | core items hit |
 |---|---|---|
-| Zergggy / Infernus | 66 % | 11 / 21 |
-| Deathy / Lash | 48 % | 5 / 21 |
-| Zergggy / Mina | 64 % | 10 / 20 |
+| Zergggy / Infernus | 73 % | 13 / 21 |
+| Deathy / Lash | 64 % | 10 / 21 |
+| Zergggy / Mina | 75 % | 13 / 20 |
 
 * **Core set**: items bought in ≥ 30 % of the player's 30 sampled matches, with wins weighted 1.5× and
   losses 1×. Items under 30 % are their experiments and are excluded.
@@ -127,10 +130,36 @@ worth are tagged **stretch**: buy them only if the game runs long.
   median stat value of priced items so popularity and win rate decide. Found on the Lash data itself
   (100 %-usage items missing from the build), fixed before re-reading any agreement score; Infernus went
   60 → 66 %, Lash 45 → 48 %, Mina unchanged at 64 %.
-* Lash stays the weakest set and the cause is known but deliberately not tuned away: high-rank Lash
-  win rates are heavily selection-biased for late luxury items (Crippling Headshot 63 %, Spellslinger
-  68 % at 5 % usage) which fill the weapon slots ahead of Headhunter / Headshot Booster (94–95 % usage).
-  Fixing that means changing the win-rate prior, which is exactly the weight tuning ruled out.
+* **Usage-weighted win lift** (second agreement pass). Shrinkage by sample size did not remove the Lash
+  problem above: Crippling Headshot's 63 % is computed from 5,500 matches, so K ≈ 1,070 barely moves it,
+  yet the number is about which games it gets bought in, not what it does. Multiplying the lift by usage
+  is the statement that the win rate is only an unbiased estimate when nearly everyone buys the item.
+  Lash 48 → 54 %, Mina 64 → 67 %, Infernus unchanged at 66 %.
+* **Stat-table weight 0.8 → 0.2** (same pass; this one is a weight change and is reported as such). With
+  the win-lift fixed, the remaining Lash misses were Headshot Booster, Extra Charge, Stamina Mastery and
+  Tankbuster (81–99 % of high-rank games) losing to Battle Vest and Enchanter's Emblem (5 %). The score
+  breakdown showed why: `eff`/`kit` are value-per-soul from a hand-set stat table, normalised by the
+  maximum, and cheap stat sticks reach 1.0 while effect items sit at 0.05–0.2, so 1.6 points of
+  hand-set opinion outweighed 1.0 point of 21k-match expert consensus. Two data-side fixes were tried
+  first and rejected because they made every set worse (percentile-ranking the stat terms: 57/52/64;
+  capping at the 90th percentile: 57/52/64). The stat terms were designed to correct all-rank popularity;
+  once the population is Phantom+ they should be a tie-breaker and hero-fit nudge, not a driver. The
+  full sweep is shown so the choice is transparent, not a picked point:
+
+  | eff = kit weight | Infernus | Lash | Mina |
+  |---|---|---|---|
+  | 0.8 (before) | 66 | 54 | 67 |
+  | 0.6 | 66 | 57 | 67 |
+  | 0.4 | 73 | 64 | 63 |
+  | 0.2 (chosen) | 73 | 64 | 75 |
+  | 0.1 | 73 | 64 | 75 |
+  | 0.0 | 69 | 64 | 76 |
+
+  0.2 is the smallest weight before the stat table stops mattering at all; it is kept because the kit
+  term is the only place hero-specific scaling enters and because removing it costs Infernus. The
+  validation sets were still never read by the generator, but a weight chosen by looking at three
+  held-out scores is fitted to those three players in the ordinary sense; treat these numbers as
+  in-sample for that one constant and out-of-sample for everything else.
 
 * One build instead of three archetypes (user request). Neutral stat multipliers were chosen rather than
   picking the best-scoring archetype, so the choice does not depend on the validation score. Infernus

@@ -26,7 +26,7 @@ export const ARCHETYPES: Archetype[] = [
 ];
 
 // Scoring weights (see README "Scoring function").
-export const WEIGHTS = { popularity: 1.0, winLift: 1.0, efficiency: 0.8, kit: 0.8, synergy: 0.5, active: 0.1 };
+export const WEIGHTS = { popularity: 1.0, winLift: 1.0, efficiency: 0.2, kit: 0.2, synergy: 0.5, active: 0.1 };
 export const WIN_SHRINK_FRAC = 0.05;      // Bayesian shrinkage: prior weight = 5% of the hero's most-bought item's matches
 export const MIN_USAGE = 0.03;            // ignore items bought in <3% (relative) of games: their win rates are selection-biased noise
 export const MAX_ITEMS = 14;
