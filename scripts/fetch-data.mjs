@@ -23,7 +23,7 @@ const VALIDATION_SETS = [
   { account_id: 35187362, player: 'Zergggy', hero_id: 1, hero: 'Infernus' },
   { account_id: 87624911, player: 'Deathy', hero_id: 31, hero: 'Lash' },
   { account_id: 35187362, player: 'Zergggy', hero_id: 63, hero: 'Mina' },
-  { account_id: 121417982, player: 'Chounted', hero_id: 12, hero: 'Kelvin' }, // #1 on the NA Kelvin leaderboard (/v1/leaderboard/NAmerica/12) on 2026-09-04
+  { account_id: 133544364, player: 'Yndio', hero_id: 12, hero: 'Kelvin' }, // #2 on the NA Kelvin leaderboard (/v1/leaderboard/NAmerica/12) on 2026-09-04, 2,151 Kelvin games; #1 (Chounted) has 189 and was 9-21 in the sample
 ];
 const VALIDATION_MATCH_TARGET = 30;
 const VALIDATION_ONLY = process.argv.includes('--validation-only');
