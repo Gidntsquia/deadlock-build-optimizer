@@ -91,7 +91,7 @@ From `ability-order-stats`: sequences restricted to the hero's 4 signature abili
 
 ## Held-out validation (`src/validation/heldout.ts`)
 
-Runs after generation; the only module that reads `public/data/validation/`. Three (top player, hero) sets
+Runs after generation; the only module that reads `public/data/validation/`. Four (top player, hero) sets
 are listed in `manifest.json` and fetched by `node scripts/fetch-data.mjs --validation-only`:
 
 | set | account | why |
@@ -99,6 +99,7 @@ are listed in `manifest.json` and fetched by `node scripts/fetch-data.mjs --vali
 | Zergggy / Infernus | 35187362 | original brief |
 | Deathy / Lash | 87624911 (Eternus, 855 Lash games; the other "Deathy" account has none) | Lash main |
 | Zergggy / Mina | 35187362 | same player, second hero |
+| Chounted / Kelvin | 121417982 | #1 on the NA Kelvin leaderboard (`/v1/leaderboard/NAmerica/12`, 2026-09-04); added after every generator change above, so it is the only fully out-of-sample set |
 
 Results, single Recommended build, 30 matches each:
 
@@ -107,6 +108,7 @@ Results, single Recommended build, 30 matches each:
 | Zergggy / Infernus | 73 % | 13 / 21 |
 | Deathy / Lash | 64 % | 10 / 21 |
 | Zergggy / Mina | 75 % | 13 / 20 |
+| Chounted / Kelvin | 67 % | 12 / 21 |
 
 * **Core set**: items bought in ≥ 30 % of the player's 30 sampled matches, with wins weighted 1.5× and
   losses 1×. Items under 30 % are their experiments and are excluded.
@@ -160,6 +162,13 @@ worth are tagged **stretch**: buy them only if the game runs long.
   validation sets were still never read by the generator, but a weight chosen by looking at three
   held-out scores is fitted to those three players in the ordinary sense; treat these numbers as
   in-sample for that one constant and out-of-sample for everything else.
+* **Chounted / Kelvin as a true out-of-sample check.** Added after the weight change, with no further
+  edits: 67 % (12 / 21 core). The misses are Rapid Recharge, Extra Charge, Golden Goose Egg, Mystic
+  Reverb, Tankbuster, Mystic Vulnerability, Mystic Burst, Healing Rite and Escalating Exposure; the
+  build's non-core picks are Healbane, Enduring Speed, Compress Cooldown, Spirit Lifesteal, Duration
+  Extender and Transcendent Cooldown. Chounted was 9–21 in these 30 games, so the core set is weighted
+  towards losses. Leaderboard rank 2 (Yndio, 2,151 Kelvin games) is the more prolific Kelvin main; rank 1
+  was used because that is what "best" on the leaderboard means.
 
 * One build instead of three archetypes (user request). Neutral stat multipliers were chosen rather than
   picking the best-scoring archetype, so the choice does not depend on the validation score. Infernus

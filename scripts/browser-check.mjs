@@ -82,7 +82,7 @@ try {
   }
   await page.screenshot({ path: 'screenshots/other-hero.png', fullPage: true });
   // heroes with their own held-out set show that player's validation panel
-  for (const [v, who] of [['31', "Deathy's Lash"], ['63', "Zergggy's Mina"]]) {
+  for (const [v, who] of [['31', "Deathy's Lash"], ['63', "Zergggy's Mina"], ['12', "Chounted's Kelvin"]]) {
     await page.selectOption('.hero-select', v);
     await page.waitForFunction((w) => document.querySelector('.panel h2')?.textContent.includes(w), who, { timeout: 15000 });
     const agreement = await page.textContent('.big');
