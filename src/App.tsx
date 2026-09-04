@@ -40,8 +40,11 @@ export default function App() {
   return (
     <>
       <header className="app-header">
-        <h1>Deadlock Build Optimizer</h1>
-        <div className="sub">{hero.name} · data window {manifest?.window_days}d, fetched {manifest?.fetched_at.slice(0, 10)}</div>
+        <img src={img(hero.images.small)} alt="" />
+        <div>
+          <h1>{hero.name} builds</h1>
+          <div className="sub">Deadlock Build Optimizer, {manifest?.window_days}-day data fetched {manifest?.fetched_at.slice(0, 10)}</div>
+        </div>
       </header>
       <div className="hero-strip" role="tablist" aria-label="Hero">
         {heroes.map((h) => (

@@ -25,8 +25,8 @@ let fails = 0;
 const check = (n, ok, d = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' — ' + d : ''}`); if (!ok) fails++; };
 try {
   await page.goto('http://localhost:4173/');
-  await page.waitForSelector('.item-row', { timeout: 20000 });
-  check('opens on Infernus', (await page.textContent('.app-header .sub')).startsWith('Infernus'));
+  await page.waitForSelector('.tiles .tile', { timeout: 20000 });
+  check('opens on Infernus', (await page.textContent('.app-header h1')).startsWith('Infernus'));
   const tabs = await page.$$('.tab');
   check('>=2 named builds', tabs.length >= 2, `${tabs.length} tabs: ${(await Promise.all(tabs.map((t) => t.textContent()))).join(' | ')}`);
   const noHScroll = async (label) => {
@@ -41,23 +41,23 @@ try {
   await tapOk('Infernus');
   for (let i = 0; i < tabs.length; i++) {
     await tabs[i].tap();
-    const rows = await page.$$('.item-row');
+    const rows = await page.$$('.tiles .tile');
     const phases = await page.$$eval('.phase-head span:first-child', (els) => els.map((e) => e.textContent));
-    const totals = await page.$$eval('.item-row .cost small', (els) => els.map((e) => Number(e.textContent.replace(/[^\d]/g, ''))));
-    const costs = await page.$$eval('.item-row .cost b', (els) => els.map((e) => Number(e.textContent.replace(/[^\d]/g, ''))));
+    const totals = await page.$$eval('.tiles .tile', (els) => els.map((e) => Number(e.dataset.total)));
+    const costs = await page.$$eval('.tiles .tile', (els) => els.map((e) => Number(e.dataset.cost)));
     let run = 0; const totalsOk = costs.every((c, k) => (run += c) === totals[k]);
-    const imgs = await page.$$eval('.item-row img', (els) => els.map((e) => e.getAttribute('src')));
-    const broken = await page.$$eval('.item-row img', (els) => els.filter((e) => !e.complete || e.naturalWidth === 0).length);
-    const badges = await page.$$eval('.item-row .badge', (els) => els.filter((e) => /core/.test(e.className)).length);
-    const abil = await page.$$eval('.ability-step b', (els) => [...new Set(els.map((e) => e.textContent))]);
-    const unlocks = await page.$$eval('.ability-step.unlock', (els) => els.length);
+    const imgs = await page.$$eval('.tiles .tile img', (els) => els.map((e) => e.getAttribute('src')));
+    const broken = await page.$$eval('.tiles .tile img', (els) => els.filter((e) => !e.complete || e.naturalWidth === 0).length);
+    const badges = await page.$$eval('.tiles .tile[data-core]', (els) => els.length);
+    const abil = await page.$$eval('.ap-icon img', (els) => [...new Set(els.map((e) => e.getAttribute('alt')))]);
+    const unlocks = await page.$$eval('.ap-track .pt.unlock', (els) => els.length);
     const agreement = await page.textContent('.big');
     check(`build ${i + 1}: >=12 items, 3 phases, running totals, images`, rows.length >= 12 && broken === 0 && phases.length === 3 && totalsOk && imgs.every((s) => s && /\/data\/img\/items\/\d+\.webp$/.test(s)), `${rows.length} items, phases ${phases.join('/')}`);
     check(`build ${i + 1}: core badge on every item + agreement`, badges === rows.length && /\d+% agreement/.test(agreement), agreement);
     check(`build ${i + 1}: 4 real Infernus abilities, unlock + tiers`, abil.length === 4 && unlocks === 4 && ['Napalm', 'Flame Dash', 'Afterburn', 'Concussive Combustion'].every((n) => abil.includes(n)), abil.join(', '));
   }
   // tap an item -> detail card
-  await (await page.$('.item-row')).tap();
+  await (await page.$('.tiles .tile')).tap();
   await page.waitForSelector('.sheet');
   const name = await page.textContent('.sheet h2');
   const chips = await page.$$eval('.sheet .chip', (els) => els.map((e) => e.textContent.trim()));
@@ -73,16 +73,16 @@ try {
   const others = options.filter(([v]) => v !== '1').slice(0, 3);
   for (const [v, n] of others) {
     await page.selectOption('.hero-select', v);
-    await page.waitForFunction((name) => document.querySelector('.app-header .sub')?.textContent.startsWith(name) && document.querySelectorAll('.item-row').length >= 12, n, { timeout: 15000 });
-    const rows = await page.$$eval('.item-row', (els) => els.length);
-    const abil = await page.$$eval('.ability-step b', (els) => [...new Set(els.map((e) => e.textContent))]);
+    await page.waitForFunction((name) => document.querySelector('.app-header h1')?.textContent.startsWith(name) && document.querySelectorAll('.tiles .tile').length >= 12, n, { timeout: 15000 });
+    const rows = await page.$$eval('.tiles .tile', (els) => els.length);
+    const abil = await page.$$eval('.ap-icon img', (els) => [...new Set(els.map((e) => e.getAttribute('alt')))]);
     check(`${n}: renders build + ability order`, rows >= 12 && abil.length === 4, `${rows} items, abilities ${abil.join(', ')}`);
     await noHScroll(n);
     await tapOk(n);
   }
   await page.screenshot({ path: 'screenshots/other-hero.png', fullPage: true });
   await page.selectOption('.hero-select', '1');
-  await page.waitForFunction(() => document.querySelector('.app-header .sub')?.textContent.startsWith('Infernus'));
+  await page.waitForFunction(() => document.querySelector('.app-header h1')?.textContent.startsWith('Infernus'));
 } catch (e) { check('browser flow', false, String(e)); }
 check('no console errors (network disabled)', errors.length === 0, errors.slice(0, 3).join(' | '));
 console.log(`(blocked ${imgBlocked.length} external requests, e.g. images — expected offline)`);

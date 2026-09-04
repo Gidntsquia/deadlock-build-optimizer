@@ -1,4 +1,4 @@
-import { img } from '../data/load';
+import { ItemTile } from './ItemTile';
 import { useEffect } from 'react';
 import type { BuildItem } from '../types';
 import { cleanText, fmtSouls, labelFor } from '../text';
@@ -26,11 +26,11 @@ export function ItemCard({ bi, isCore, onClose }: { bi: BuildItem; isCore: boole
     <div className="sheet-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label={it.name}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
-          <img src={img(it.shop_image_webp || it.image_webp)} alt="" />
+          <ItemTile item={it} />
           <div>
             <h2>{it.name}</h2>
             <div className="chips">
-              <span className="chip"><span className={`slot-dot slot-${it.item_slot_type}`} /> {SLOT_LABEL[it.item_slot_type]}</span>
+              <span className="chip">{SLOT_LABEL[it.item_slot_type]}</span>
               <span className="chip">Tier {it.item_tier}</span>
               <span className="chip">{fmtSouls(it.cost)} souls</span>
               {isCore !== undefined && <span className={`badge ${isCore ? 'core' : 'notcore'}`}>{isCore ? 'Zergggy core' : 'Not core'}</span>}

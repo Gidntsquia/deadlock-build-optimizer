@@ -119,3 +119,11 @@ worth are tagged **stretch**: buy them only if the game runs long.
 
 `src/generator` (scoring), `src/validation` (held-out report), `src/personal.ts`, `src/components`
 (BuildView, ItemCard bottom sheet), `scripts/` (fetch, CLI, verify). Vite + React 19 + TypeScript, no backend.
+
+## Visual design
+
+The build screen mirrors the in-game shop: a parchment build board with Early / Mid / Late Game panels,
+slot-tinted item tiles (orange weapon, green vitality, purple spirit) with a roman tier tab in the corner,
+and a navy Ability Point Order board with one track per ability where each marker shows the ability points
+that step costs (unlock free, then 1 / 2 / 5). Buy order is the small number on each tile. Nunito is
+self-hosted from `public/fonts` so the app still makes no network requests after `fetch-data`.
