@@ -1,0 +1,38 @@
+// CLI: generate builds from the local snapshot and (optionally) validate against Zergggy.
+// Usage: npm run generate [-- <hero_id>] [--json]
+import { readFileSync } from 'node:fs';
+import { generateBuilds } from '../src/generator';
+import { computeCoreSet, validateBuild } from '../src/validation/zergggy';
+import { personalInsight } from '../src/personal';
+
+const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
+const args = process.argv.slice(2);
+const heroId = Number(args.find((a) => /^\d+$/.test(a)) ?? 1);
+const asJson = args.includes('--json');
+
+const items = read('items.json'), heroes = read('heroes.json'), abilities = read('abilities.json');
+const hero = heroes.find((h: any) => h.id === heroId);
+if (!hero) throw new Error(`hero ${heroId} not in snapshot`);
+const analytics = read(`analytics/${heroId}.json`);
+const builds = generateBuilds({ hero, abilities, items, analytics });
+
+if (asJson) {
+  console.log(JSON.stringify(builds.map((b) => ({ key: b.key, items: b.items.map((i) => [i.item.id, i.phase, i.runningTotal]), abilities: b.abilityOrder.map((s) => [s.ability.id, s.kind]) }))));
+  process.exit(0);
+}
+const fmt = (s: number) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+let core = null as ReturnType<typeof computeCoreSet> | null;
+if (heroId === 1) core = computeCoreSet(read('zergggy/purchases.json'), items);
+const insight = personalInsight(read('user/history.json'), heroId);
+console.log(`# ${hero.name} — ${builds.length} builds. User budget ${insight.budget} souls (median NW), median length ${fmt(insight.medianDurationS)}`);
+for (const b of builds) {
+  const v = core ? validateBuild(b, core) : null;
+  console.log(`\n## ${b.name}  total ${b.totalCost}${v ? `  | agreement ${(v.agreement * 100).toFixed(0)}% (overlap ${(v.overlap * 100).toFixed(0)}%, order ${(v.order * 100).toFixed(0)}%, ${v.sharedCount}/${core!.core.length} core)` : ''}`);
+  for (const i of b.items) console.log(`  ${String(i.order).padStart(2)} ${i.phase.padEnd(5)} ${i.item.name.padEnd(24)} T${i.item.item_tier} ${i.item.item_slot_type.padEnd(8)} ${String(i.item.cost).padStart(5)} Σ${String(i.runningTotal).padStart(6)}  ${fmt(i.avgBuyTimeS)} wr${(i.winRate * 100).toFixed(1)} use${(i.usageRate * 100).toFixed(0)} sc${i.score.toFixed(2)} ${v ? (v.badges[i.item.id] ? 'CORE' : '-') : ''}`);
+  console.log('  abilities: ' + b.abilityOrder.map((s) => `${s.ability.name}[${s.kind}]`).join(' > '));
+}
+if (core) {
+  console.log(`\n# Zergggy core set (${core.matches} matches, ${core.wins} wins):`);
+  for (const c of core.core) console.log(`  ${c.item.name.padEnd(24)} ${(c.frequency * 100).toFixed(0)}%  median buy ${fmt(c.medianBuyTimeS)}`);
+  console.log(`  experiments (<30%): ${core.experiments.map((c) => `${c.item.name} ${(c.frequency * 100).toFixed(0)}%`).join(', ')}`);
+}
