@@ -106,7 +106,8 @@ worth are tagged **stretch**: buy them only if the game runs long.
 * Permutation stats trimmed to the 600 most-played pairs and ability sequences to the top 400 per hero to
   keep the snapshot at ~16 MB.
 * Buy order uses average purchase time rather than cost-ascending; that is how the aggregate data describes
-  real games.
+  real games. The average time itself is not shown in the UI: it is skewed by outlier late buys and
+  reads as a "buy at this minute" instruction, which it is not. Only the resulting order and phase are shown.
 * Slot cap 5 per category (4 base slots + flex), matching current shop rules approximately.
 * Standard mode = Unranked + Ranked in the Normal game mode for both the user and Zergggy.
 * Items are counted once per match regardless of sells; starter items that get sold later still count.

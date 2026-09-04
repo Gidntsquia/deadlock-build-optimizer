@@ -1,7 +1,7 @@
 import { img } from '../data/load';
 import { useEffect } from 'react';
 import type { BuildItem } from '../types';
-import { cleanText, fmtSouls, fmtTime, labelFor } from '../text';
+import { cleanText, fmtSouls, labelFor } from '../text';
 
 const SLOT_LABEL = { weapon: 'Weapon', vitality: 'Vitality', spirit: 'Spirit' } as const;
 const HIDE = new Set(['AbilityUnitTargetLimit']);
@@ -61,7 +61,6 @@ export function ItemCard({ bi, isCore, onClose }: { bi: BuildItem; isCore: boole
           <div className="kv">
             <span>Buy step</span><span>#{bi.order} · {bi.phase} game</span>
             <span>Running total after buy</span><span>{fmtSouls(bi.runningTotal)}</span>
-            <span>Hero avg. buy time</span><span>{fmtTime(bi.avgBuyTimeS)}</span>
             <span>Win rate when bought</span><span>{(bi.winRate * 100).toFixed(1)}%</span>
             <span>Relative usage</span><span>{(bi.usageRate * 100).toFixed(0)}%</span>
             <span>Score</span><span>{bi.score.toFixed(2)}</span>

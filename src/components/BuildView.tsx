@@ -34,7 +34,7 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
                         {isCore !== undefined && <span className={`badge ${isCore ? 'core' : 'notcore'}`}>{isCore ? 'core' : 'not core'}</span>}
                         {b.runningTotal > budget && <span className="badge stretch">stretch</span>}
                       </span>
-                      <span className="meta">T{b.item.item_tier} · ~{fmtTime(b.avgBuyTimeS)} · {(b.winRate * 100).toFixed(0)}% WR</span>
+                      <span className="meta">T{b.item.item_tier} · {(b.winRate * 100).toFixed(0)}% WR</span>
                     </span>
                     <span className="cost"><b>{fmtSouls(b.item.cost)}</b><small>Σ {fmtSouls(b.runningTotal)}</small></span>
                   </button>
