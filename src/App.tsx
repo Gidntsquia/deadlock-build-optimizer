@@ -42,7 +42,7 @@ export default function App() {
       <header className="app-header">
         <img src={img(hero.images.small)} alt="" />
         <div>
-          <h1>{hero.name} builds</h1>
+          <h1>{hero.name} build</h1>
           <div className="sub">Deadlock Build Optimizer, {manifest?.window_days}-day data fetched {manifest?.fetched_at.slice(0, 10)}</div>
         </div>
       </header>
@@ -59,7 +59,6 @@ export default function App() {
       {!analytics && <div className="loading">Generating builds…</div>}
       {builds.length > 0 && (
         <>
-          <div className="tabs">{builds.map((b, i) => <button key={b.key} className={`tab ${i === tab ? 'active' : ''}`} onClick={() => setTab(i)}>{b.name}</button>)}</div>
           {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={heroId === INFERNUS ? core : null} insight={insight} heroName={hero.name} />}
         </>
       )}

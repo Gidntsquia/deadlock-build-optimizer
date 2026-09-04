@@ -43,8 +43,9 @@ npm run verify:browser  # headless 390×844 check with network blocked (needs a 
 Deterministic, pure function of (hero assets, item catalog, aggregate analytics). It never reads per-player
 data; `npm run verify` greps the module for any Zergggy reference and checks two runs give identical output.
 
-Three named archetypes are produced for every hero (`stats.ts` → `ARCHETYPES`): **Gun Carry**,
-**Spirit Burn**, **Hybrid Bruiser**. Each archetype is a table of per-stat multipliers and a slot bias.
+One build is produced per hero (`stats.ts` → `ARCHETYPES` holds the single **Recommended build**). Its
+stat multipliers are neutral (1.0) and it has no slot bias: hero fit comes from the kit term, the slot mix
+from what the population buys. The archetype table is kept so a second build can be added later.
 
 ### Scoring function
 
@@ -82,7 +83,7 @@ score(i) = 1.0 · sqrt(pop)            pop     = matches_i / matches of the hero
 ### Ability order
 
 From `ability-order-stats`: sequences restricted to the hero's 4 signature abilities, scored by
-`shrunkWR × ln(1 + matches)`; the top sequence is used (same for all archetypes). Each entry is decoded as
+`shrunkWR × ln(1 + matches)`; the top sequence is used . Each entry is decoded as
 `unlock` (first appearance) then `T1/T2/T3` upgrade tiers. Names and icons come from the abilities asset.
 
 ## Zergggy validation (`src/validation/zergggy.ts`) – held-out
@@ -105,18 +106,20 @@ worth are tagged **stretch**: buy them only if the game runs long.
 
 ## Judgment calls
 
-* Three archetypes instead of two, so heroes whose kit is neither gun- nor spirit-heavy still get a sensible option.
+* One build instead of three archetypes (user request). Neutral stat multipliers were chosen rather than
+  picking the best-scoring archetype, so the choice does not depend on the validation score. Infernus
+  agreement for the single build is 60 % (the three archetypes were 61/67/63 %).
 * Usage floor of 3 % and shrinkage prior: the first draft picked 0–1 %-usage items purely on inflated win
   rates. This was fixed on data-quality grounds (selection bias), before looking at agreement scores.
 * Popularity is relative to the hero's single most-bought item because the API does not return the hero's
   total match count.
-* Same ability sequence for all archetypes: ability-order stats are not split by item build.
 * Permutation stats trimmed to the 600 most-played pairs and ability sequences to the top 400 per hero to
   keep the snapshot at ~16 MB.
 * Generating from high-rank lobbies rather than all ranks: the tool's goal is a build a top player would
   recognise, and the all-rank Infernus mix (Rapid Rounds, Titanic Magazine, Ricochet) is not what
   high-rank lobbies buy (Extra Spirit, Healbane, Mystic Vulnerability, Rapid Recharge). This and the
-  upgrade-chain rule raised Infernus agreement from 48/48/52 % to 61/67/63 %; no scoring weight changed.
+  upgrade-chain rule raised Infernus agreement from 48/48/52 % to 61/67/63 % across the then three
+  archetypes; no scoring weight changed.
 * Buy order uses average purchase time rather than cost-ascending; that is how the aggregate data describes
   real games. The average time itself is not shown in the UI: it is skewed by outlier late buys and
   reads as a "buy at this minute" instruction, which it is not. Only the resulting order and phase are shown.
@@ -139,3 +142,7 @@ slot-tinted item tiles (orange weapon, green vitality, purple spirit) with a rom
 and a navy Ability Point Order board with one track per ability where each marker shows the ability points
 that step costs (unlock free, then 1 / 2 / 5). Buy order is the small number on each tile. Nunito is
 self-hosted from `public/fonts` so the app still makes no network requests after `fetch-data`.
+
+Desktop: from 900 px wide the page fills the window, the hero strip wraps, and the board sits left of a
+sticky column with the ability order and the reports; tiles go to 6 per row (8 from 1400 px). The phone
+layout below 900 px is unchanged. The browser check screenshots both (`screenshots/desktop.png`).

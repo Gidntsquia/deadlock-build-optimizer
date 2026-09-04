@@ -27,8 +27,8 @@ try {
   await page.goto('http://localhost:4173/');
   await page.waitForSelector('.tiles .tile', { timeout: 20000 });
   check('opens on Infernus', (await page.textContent('.app-header h1')).startsWith('Infernus'));
-  const tabs = await page.$$('.tab');
-  check('>=2 named builds', tabs.length >= 2, `${tabs.length} tabs: ${(await Promise.all(tabs.map((t) => t.textContent()))).join(' | ')}`);
+  const tabs = await page.$$('.board h2');
+  check('one named build', tabs.length === 1, `${(await Promise.all(tabs.map((t) => t.textContent()))).join(' | ')}`);
   const noHScroll = async (label) => {
     const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
     check(`no horizontal scroll (${label})`, w[0] <= w[1], `${w[0]} <= ${w[1]}`);
@@ -40,7 +40,7 @@ try {
   };
   await tapOk('Infernus');
   for (let i = 0; i < tabs.length; i++) {
-    await tabs[i].tap();
+    
     const rows = await page.$$('.tiles .tile');
     const phases = await page.$$eval('.phase-head span:first-child', (els) => els.map((e) => e.textContent));
     const totals = await page.$$eval('.tiles .tile', (els) => els.map((e) => Number(e.dataset.total)));
@@ -81,8 +81,14 @@ try {
     await tapOk(n);
   }
   await page.screenshot({ path: 'screenshots/other-hero.png', fullPage: true });
-  await page.selectOption('.hero-select', '1');
+  // desktop layout: the board and the side column sit next to each other and fill the window
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.click('.hero-chip:has-text("Infernus")');
   await page.waitForFunction(() => document.querySelector('.app-header h1')?.textContent.startsWith('Infernus'));
+  await tapOk('Infernus desktop');
+  const [bb, sb] = await Promise.all([page.$eval('.col-main', (e) => e.getBoundingClientRect().toJSON()), page.$eval('.col-side', (e) => e.getBoundingClientRect().toJSON())]);
+  check('desktop: two columns filling the window', bb.right <= sb.left && sb.right > 1300 && bb.width > 700, `board ${Math.round(bb.width)}px, side ${Math.round(sb.width)}px`);
+  await page.screenshot({ path: 'screenshots/desktop.png' });
 } catch (e) { check('browser flow', false, String(e)); }
 check('no console errors (network disabled)', errors.length === 0, errors.slice(0, 3).join(' | '));
 console.log(`(blocked ${imgBlocked.length} external requests, e.g. images — expected offline)`);

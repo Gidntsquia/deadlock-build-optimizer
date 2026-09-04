@@ -15,21 +15,13 @@ export const UNIT_VALUE: Record<string, number> = {
 // Which stats each build archetype cares about (multiplier on the unit value).
 export interface Archetype { key: string; name: string; tagline: string; slotBias: Record<'weapon' | 'vitality' | 'spirit', number>; statMult: Record<string, number> }
 
+// One build per hero. Stat multipliers are neutral (1.0 for every stat): the hero fit comes from the
+// kit profile term, the slot mix from what the population actually buys. No slot bias.
 export const ARCHETYPES: Archetype[] = [
   {
-    key: 'gun', name: 'Gun Carry', tagline: 'Weapon damage, fire rate and bullet lifesteal; abilities support the gun.',
-    slotBias: { weapon: 1.0, vitality: 0.85, spirit: 0.6 },
-    statMult: { BaseAttackDamagePercent: 1.6, BonusFireRate: 1.6, BonusClipSizePercent: 1.2, BulletLifestealPercent: 1.4, BulletArmorReduction: 1.4, BonusBulletSpeedPercent: 1.1, TechPower: 0.5, TechPowerPercent: 0.4, CooldownReduction: 0.6, AbilityLifestealPercentHero: 0.4, BonusHealth: 1.0, BulletResist: 1.0, TechResist: 1.0, BonusMoveSpeed: 1.0, Stamina: 1.0 },
-  },
-  {
-    key: 'spirit', name: 'Spirit Burn', tagline: 'Spirit power, cooldowns and ability lifesteal; damage over time does the work.',
-    slotBias: { weapon: 0.6, vitality: 0.85, spirit: 1.0 },
-    statMult: { TechPower: 1.6, TechPowerPercent: 1.6, SpiritPower: 1.6, BonusSpirit: 1.6, CooldownReduction: 1.4, AbilityLifestealPercentHero: 1.4, BonusAbilityDurationPercent: 1.3, TechRangeMultiplier: 1.1, MagicResistReduction: 1.4, BaseAttackDamagePercent: 0.5, BonusFireRate: 0.6, BulletLifestealPercent: 0.5, BonusHealth: 1.0, BulletResist: 1.0, TechResist: 1.0, BonusMoveSpeed: 1.0, Stamina: 1.0 },
-  },
-  {
-    key: 'bruiser', name: 'Hybrid Bruiser', tagline: 'Health, resistances and sustain first; balanced damage on top.',
-    slotBias: { weapon: 0.8, vitality: 1.0, spirit: 0.8 },
-    statMult: { BonusHealth: 1.6, BulletResist: 1.5, TechResist: 1.5, BonusHealthRegen: 1.3, OutOfCombatHealthRegen: 1.0, BulletLifestealPercent: 1.2, AbilityLifestealPercentHero: 1.2, CombatBarrier: 1.4, StatusResistancePercent: 1.3, BaseAttackDamagePercent: 0.9, BonusFireRate: 0.9, TechPower: 0.9, BonusMoveSpeed: 1.1, Stamina: 1.1 },
+    key: 'recommended', name: 'Recommended build', tagline: 'What high-rank players buy on this hero, in the order they buy it.',
+    slotBias: { weapon: 1, vitality: 1, spirit: 1 },
+    statMult: {},
   },
 ];
 

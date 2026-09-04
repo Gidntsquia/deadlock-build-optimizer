@@ -21,6 +21,8 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
 
   return (
     <>
+    <div className="layout">
+      <div className="col-main">
       <div className="board">
         <h2>{build.name}</h2>
         <div className="muted">{build.tagline}</div>
@@ -53,7 +55,9 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
           </div>
         )}
       </div>
+      </div>
 
+      <div className="col-side">
       <div className="ap">
         <h2>Ability Point Order</h2>
         <div className="muted">
@@ -108,6 +112,8 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
         </div>
       )}
 
+      </div>
+    </div>
       {open && <ItemCard bi={open} isCore={validation?.badges[open.item.id]} onClose={() => setOpen(null)} />}
     </>
   );
