@@ -1,13 +1,14 @@
-// Held-out validation against Zergggy's (account 35187362) real Infernus matches.
-// This module is the ONLY code that reads public/data/zergggy/*. It runs after builds are generated
-// and never feeds back into the generator.
+// Held-out validation against a top player's real matches on one hero (sets listed in manifest.json,
+// e.g. Zergggy/Infernus, Deathy/Lash, Zergggy/Mina). This module is the ONLY code that reads
+// public/data/validation/*. It runs after builds are generated and never feeds back into the generator.
 import type { Build, Item } from '../types';
 import { j } from '../data/load';
 
-export interface ZergggyPurchases { account_id: number; hero_id: number; matches: { match_id: number; won: boolean; duration_s: number; items: { item_id: number; game_time_s: number; sold_time_s: number }[] }[] }
+export interface HeldoutSet { account_id: number; player: string; hero_id: number; hero: string; file: string; matches: number }
+export interface HeldoutPurchases { account_id: number; player: string; hero_id: number; hero: string; matches: { match_id: number; won: boolean; duration_s: number; items: { item_id: number; game_time_s: number; sold_time_s: number }[] }[] }
 
-/** Loads the held-out snapshot. Only this module reads public/data/zergggy/. */
-export const loadZergggy = () => j<ZergggyPurchases>('zergggy/purchases.json');
+/** Loads one held-out snapshot. Only this module reads public/data/validation/. */
+export const loadHeldout = (set: HeldoutSet) => j<HeldoutPurchases>(set.file);
 
 export const CORE_THRESHOLD = 0.3;   // item must appear in >=30% of (win-weighted) sampled matches
 export const WIN_WEIGHT = 1.5;       // a won match counts 1.5x, a lost match 1x
@@ -15,9 +16,9 @@ export const OVERLAP_WEIGHT = 0.7;   // agreement = 0.7*overlap(F1) + 0.3*order 
 export const ORDER_WEIGHT = 0.3;
 
 export interface CoreItem { item: Item; frequency: number; medianBuyTimeS: number; matches: number }
-export interface CoreSet { core: CoreItem[]; experiments: CoreItem[]; matches: number; wins: number }
+export interface CoreSet { player: string; hero: string; core: CoreItem[]; experiments: CoreItem[]; matches: number; wins: number }
 
-export function computeCoreSet(data: ZergggyPurchases, items: Item[]): CoreSet {
+export function computeCoreSet(data: HeldoutPurchases, items: Item[]): CoreSet {
   const catalog = new Map(items.map((i) => [i.id, i]));
   let totalW = 0;
   const acc = new Map<number, { w: number; times: number[]; n: number }>();
@@ -40,7 +41,7 @@ export function computeCoreSet(data: ZergggyPurchases, items: Item[]): CoreSet {
     const s = [...a.times].sort((x, y) => x - y);
     return { item: catalog.get(id)!, frequency: a.w / totalW, medianBuyTimeS: s[Math.floor(s.length / 2)], matches: a.n };
   }).sort((x, y) => y.frequency - x.frequency || x.item.id - y.item.id);
-  return { core: all.filter((c) => c.frequency >= CORE_THRESHOLD), experiments: all.filter((c) => c.frequency < CORE_THRESHOLD), matches: data.matches.length, wins: data.matches.filter((m) => m.won).length };
+  return { player: data.player, hero: data.hero, core: all.filter((c) => c.frequency >= CORE_THRESHOLD), experiments: all.filter((c) => c.frequency < CORE_THRESHOLD), matches: data.matches.length, wins: data.matches.filter((m) => m.won).length };
 }
 
 export interface BuildValidation {
@@ -62,7 +63,7 @@ export function validateBuild(build: Build, core: CoreSet): BuildValidation {
   const precision = build.items.length ? shared.length / build.items.length : 0;
   const recall = core.core.length ? shared.length / core.core.length : 0;
   const overlap = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
-  // order concordance: fraction of shared-item pairs whose relative order matches Zergggy's median buy times
+  // order concordance: fraction of shared-item pairs whose relative order matches the player's median buy times
   let conc = 0, pairs = 0;
   for (let i = 0; i < shared.length; i++) for (let j = i + 1; j < shared.length; j++) {
     pairs++;

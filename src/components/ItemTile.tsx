@@ -14,7 +14,7 @@ export function ItemTile({ item, order, isCore, stretch, onClick, ariaLabel, tot
       <span className={`tier t${item.item_tier}`}><span>{ROMAN[item.item_tier] ?? item.item_tier}</span></span>
       {order !== undefined && <span className="order">{order}</span>}
       {item.is_active_item && <span className="active-tag">ACTIVE</span>}
-      {isCore && <span className="mark core" title="In Zergggy's core set">✓</span>}
+      {isCore && <span className="mark core" title="In the top player's core set">✓</span>}
       {!isCore && stretch && <span className="mark stretch" title="Past your median net worth">$</span>}
       <span className="plate">{item.name}</span>
     </Tag>

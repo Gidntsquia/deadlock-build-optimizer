@@ -81,10 +81,19 @@ try {
     await tapOk(n);
   }
   await page.screenshot({ path: 'screenshots/other-hero.png', fullPage: true });
+  // heroes with their own held-out set show that player's validation panel
+  for (const [v, who] of [['31', "Deathy's Lash"], ['63', "Zergggy's Mina"]]) {
+    await page.selectOption('.hero-select', v);
+    await page.waitForFunction((w) => document.querySelector('.panel h2')?.textContent.includes(w), who, { timeout: 15000 });
+    const agreement = await page.textContent('.big');
+    const badges = await page.$$eval('.tiles .tile[data-core]', (els) => els.length);
+    const rows = await page.$$eval('.tiles .tile', (els) => els.length);
+    check(`${who}: validation panel + core badges`, /\d+% agreement/.test(agreement) && badges === rows, agreement);
+  }
   // desktop layout: the board and the side column sit next to each other and fill the window
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.click('.hero-chip:has-text("Infernus")');
-  await page.waitForFunction(() => document.querySelector('.app-header h1')?.textContent.startsWith('Infernus'));
+  await page.waitForFunction(() => document.querySelector('.app-header h1')?.textContent.startsWith('Infernus') && document.querySelector('.col-main'), null, { timeout: 15000 });
   await tapOk('Infernus desktop');
   const [bb, sb] = await Promise.all([page.$eval('.col-main', (e) => e.getBoundingClientRect().toJSON()), page.$eval('.col-side', (e) => e.getBoundingClientRect().toJSON())]);
   check('desktop: two columns filling the window', bb.right <= sb.left && sb.right > 1300 && bb.width > 700, `board ${Math.round(bb.width)}px, side ${Math.round(sb.width)}px`);

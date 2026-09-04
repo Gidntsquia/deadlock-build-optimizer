@@ -1,7 +1,7 @@
 import { img } from '../data/load';
 import { useState } from 'react';
 import type { Build, BuildItem, Phase } from '../types';
-import type { BuildValidation, CoreSet } from '../validation/zergggy';
+import type { BuildValidation, CoreSet } from '../validation/heldout';
 import type { PersonalInsight } from '../personal';
 import { fmtSouls, fmtTime } from '../text';
 import { ItemCard } from './ItemCard';
@@ -49,7 +49,7 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
         </div>
         {(hasCore || hasStretch) && (
           <div className="legend">
-            {hasCore && <span><i style={{ background: 'var(--good)' }} /> in Zergggy's core set</span>}
+            {hasCore && <span><i style={{ background: 'var(--good)' }} /> in {core?.player}'s core set</span>}
             {hasStretch && <span><i style={{ background: 'var(--warn)' }} /> past your usual net worth</span>}
             <span>numbers are buy order</span>
           </div>
@@ -82,8 +82,8 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
 
       {validation && core && (
         <div className="panel">
-          <h2>Validation vs. Zergggy's Infernus</h2>
-          <div className="muted">How well the generator did against a held-out top player. Core set = items in ≥30% of his {core.matches} sampled matchmaking games (wins weighted 1.5×); rarer items are his experiments and are excluded. His data never feeds the generator.</div>
+          <h2>Validation vs. {core.player}'s {core.hero}</h2>
+          <div className="muted">How well the generator did against a held-out top player. Core set = items in ≥30% of their {core.matches} sampled matchmaking games (wins weighted 1.5×); rarer items are their experiments and are excluded. Their data never feeds the generator.</div>
           <div className="big" style={{ marginTop: 6 }}>{(validation.agreement * 100).toFixed(0)}% agreement</div>
           <div className="meter"><div style={{ width: `${validation.agreement * 100}%` }} /></div>
           <div className="kv">

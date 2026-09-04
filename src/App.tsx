@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Ability, Build, Hero, HeroAnalytics, Item } from './types';
 import { img, loadAnalytics, loadCore, loadUser, type Manifest } from './data/load';
 import { generateBuilds } from './generator';
-import { computeCoreSet, loadZergggy, validateBuild, type CoreSet, type ZergggyPurchases } from './validation/zergggy';
+import { computeCoreSet, loadHeldout, validateBuild, type CoreSet, type HeldoutPurchases } from './validation/heldout';
 import { personalInsight, type UserHistory } from './personal';
 import { BuildView } from './components/BuildView';
 
@@ -13,7 +13,7 @@ export default function App() {
   const [heroes, setHeroes] = useState<Hero[]>([]);
   const [abilities, setAbilities] = useState<Ability[]>([]);
   const [manifest, setManifest] = useState<Manifest | null>(null);
-  const [zergggy, setZergggy] = useState<ZergggyPurchases | null>(null);
+  const [heldout, setHeldout] = useState<HeldoutPurchases | null>(null);
   const [user, setUser] = useState<UserHistory | null>(null);
   const [heroId, setHeroId] = useState(INFERNUS);
   const [analytics, setAnalytics] = useState<HeroAnalytics | null>(null);
@@ -22,15 +22,20 @@ export default function App() {
 
   useEffect(() => {
     loadCore().then(([i, h, a, m]) => { setItems(i); setHeroes(h); setAbilities(a); setManifest(m); }).catch((e) => setError(String(e)));
-    loadZergggy().then(setZergggy).catch(() => setZergggy(null));
     loadUser().then(setUser).catch(() => setUser(null));
   }, []);
   useEffect(() => { setAnalytics(null); loadAnalytics(heroId).then(setAnalytics).catch((e) => setError(String(e))); }, [heroId]);
+  // held-out top-player set for this hero, if the snapshot has one
+  useEffect(() => {
+    const set = manifest?.validation_sets?.find((v) => v.hero_id === heroId);
+    setHeldout(null);
+    if (set) loadHeldout(set).then((d) => { if (d.hero_id === heroId) setHeldout(d); }).catch(() => setHeldout(null));
+  }, [heroId, manifest]);
 
   const hero = heroes.find((h) => h.id === heroId);
   const builds: Build[] = useMemo(() => (hero && analytics && items.length ? generateBuilds({ hero, abilities, items, analytics }) : []), [hero, abilities, items, analytics]);
-  const core: CoreSet | null = useMemo(() => (zergggy && items.length ? computeCoreSet(zergggy, items) : null), [zergggy, items]);
-  const validations = useMemo(() => (core && heroId === INFERNUS ? builds.map((b) => validateBuild(b, core)) : []), [builds, core, heroId]);
+  const core: CoreSet | null = useMemo(() => (heldout && heldout.hero_id === heroId && items.length ? computeCoreSet(heldout, items) : null), [heldout, items, heroId]);
+  const validations = useMemo(() => (core ? builds.map((b) => validateBuild(b, core)) : []), [builds, core]);
   const insight = useMemo(() => (user ? personalInsight(user, heroId) : null), [user, heroId]);
   const build = builds[Math.min(tab, builds.length - 1)];
 
@@ -59,7 +64,7 @@ export default function App() {
       {!analytics && <div className="loading">Generating builds…</div>}
       {builds.length > 0 && (
         <>
-          {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={heroId === INFERNUS ? core : null} insight={insight} heroName={hero.name} />}
+          {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={core} insight={insight} heroName={hero.name} />}
         </>
       )}
       <footer>Data: deadlock-api.com (aggregate analytics, assets). Builds are generated deterministically from the local snapshot; see README for the scoring function.</footer>

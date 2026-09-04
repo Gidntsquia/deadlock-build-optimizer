@@ -73,7 +73,13 @@ export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
     rawEff.push(eff); rawKit.push(k);
     return { item, stat: s, eff, kit: k };
   });
-  const effMax = Math.max(1e-9, ...rawEff), kitMax = Math.max(1e-9, ...rawKit);
+  // Items whose value is an effect the stat table does not price (e.g. Mystic Burst, Healbane) have
+  // statValue 0. That is "unknown", not "worthless": give them the median value of priced items so the
+  // stat terms neither reward nor penalise them and popularity / win rate decide.
+  const median = (xs: number[]) => { const s = xs.filter((x) => x > 0).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+  const effMed = median(rawEff), kitMed = median(rawKit);
+  for (const p of pre) { if (p.eff === 0) p.eff = effMed; if (p.kit === 0) p.kit = kitMed; }
+  const effMax = Math.max(1e-9, ...pre.map((p) => p.eff)), kitMax = Math.max(1e-9, ...pre.map((p) => p.kit));
   const scored: Scored[] = pre.map(({ item, stat, eff, kit: k }) => {
     const pop = stat.matches / maxMatches;
     const shrunk = (stat.wins + K * meanWR) / (stat.matches + K);

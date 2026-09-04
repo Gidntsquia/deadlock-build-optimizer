@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { generateBuilds } from '../src/generator';
-import { computeCoreSet, validateBuild } from '../src/validation/zergggy';
+import { computeCoreSet, validateBuild } from '../src/validation/heldout';
 
 const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
 let fails = 0;
@@ -11,14 +11,19 @@ const check = (name: string, ok: boolean, detail = '') => { console.log(`${ok ? 
 const items = read('items.json'), heroes = read('heroes.json'), abilities = read('abilities.json'), manifest = read('manifest.json');
 check('item catalog has >=200 items', items.length >= 200, `${items.length} items, ${items.filter((i: any) => i.shopable && !i.disabled).length} currently shopable`);
 check('analytics snapshot for every active hero', heroes.every((h: any) => existsSync(`public/data/analytics/${h.id}.json`)), `${heroes.length} heroes`);
-const z = read('zergggy/purchases.json');
-check('>=20 Zergggy Infernus matches with purchases', z.matches.length >= 20 && z.matches.every((m: any) => m.items.length > 0), `${z.matches.length} matches`);
-check('Zergggy matches are matchmaking only', z.matches.every((m: any) => [1, 2].includes(m.match_mode) && m.game_mode === 1));
+const vsets: any[] = manifest.validation_sets ?? [];
+check('held-out sets: Zergggy/Infernus, Deathy/Lash, Zergggy/Mina', ['35187362-1', '87624911-31', '35187362-63'].every((k) => vsets.some((v) => `${v.account_id}-${v.hero_id}` === k)), vsets.map((v) => `${v.player}/${v.hero}`).join(', '));
+for (const v of vsets) {
+  const z = read(v.file);
+  check(`>=20 ${v.player} ${v.hero} matches with purchases`, z.matches.length >= 20 && z.matches.every((m: any) => m.items.length > 0), `${z.matches.length} matches`);
+  check(`${v.player} ${v.hero} matches are matchmaking only`, z.matches.every((m: any) => [1, 2].includes(m.match_mode) && m.game_mode === 1 && z.hero_id === v.hero_id));
+}
 
-// generator must not reference the Zergggy snapshot
+// generator must not reference any held-out player or snapshot
 const gen = readdirSync('src/generator').map((f) => readFileSync(`src/generator/${f}`, 'utf8')).join('\n');
-check('generator has no Zergggy reference', !/zergggy|35187362/i.test(gen));
-check('only validation module reads zergggy snapshot', execSync("grep -rl 'zergggy/' src || true").toString().trim().split('\n').filter(Boolean).every((f) => f.startsWith('src/validation/')), 'files referencing the snapshot path: ' + execSync("grep -rl 'zergggy/' src || true").toString().trim().replace(/\n/g, ', '));
+check('generator has no held-out player reference', !/zergggy|deathy|35187362|87624911|validation\//i.test(gen));
+const readers = execSync("grep -rlE 'HeldoutPurchases>\\(|validation/[0-9]' src || true").toString().trim().split('\n').filter(Boolean);
+check('only validation module reads held-out snapshots', readers.every((f) => f.startsWith('src/validation/')), 'files fetching the snapshot: ' + readers.join(', '));
 
 // every hero generates a build, >=12 items each, 3 phases, running totals, 4 real abilities
 const infAbilities = new Set(['Napalm', 'Flame Dash', 'Afterburn', 'Concussive Combustion']);
@@ -44,13 +49,15 @@ for (const hero of heroes) {
 const a = execSync('npx tsx scripts/generate-cli.ts 1 --json').toString(), b = execSync('npx tsx scripts/generate-cli.ts 1 --json').toString();
 check('rerun yields identical Infernus builds', a === b);
 
-// validation report
-const hero = heroes.find((h: any) => h.id === 1);
-const builds = generateBuilds({ hero, abilities, items, analytics: read('analytics/1.json') });
-const core = computeCoreSet(z, items);
-for (const bld of builds) {
-  const v = validateBuild(bld, core);
-  check(`${bld.name}: every item has a core badge + agreement %`, bld.items.every((i) => typeof v.badges[i.item.id] === 'boolean') && v.agreement >= 0 && v.agreement <= 1, `${(v.agreement * 100).toFixed(0)}%`);
+// validation report for every held-out set
+for (const v of vsets) {
+  const hero = heroes.find((h: any) => h.id === v.hero_id);
+  const builds = generateBuilds({ hero, abilities, items, analytics: read(`analytics/${v.hero_id}.json`) });
+  const core = computeCoreSet(read(v.file), items);
+  for (const bld of builds) {
+    const val = validateBuild(bld, core);
+    check(`${v.player}/${v.hero}: every item has a core badge + agreement %`, bld.items.every((i) => typeof val.badges[i.item.id] === 'boolean') && val.agreement >= 0 && val.agreement <= 1, `${(val.agreement * 100).toFixed(0)}% (${val.sharedCount}/${core.core.length} core)`);
+  }
 }
 console.log(`\nsnapshot fetched ${manifest.fetched_at}; ${fails} failure(s)`);
 process.exit(fails ? 1 : 0);

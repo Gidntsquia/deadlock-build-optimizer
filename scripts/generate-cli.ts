@@ -1,8 +1,8 @@
-// CLI: generate builds from the local snapshot and (optionally) validate against Zergggy.
+// CLI: generate builds from the local snapshot and (optionally) validate against the held-out top player for that hero (if any).
 // Usage: npm run generate [-- <hero_id>] [--json]
 import { readFileSync } from 'node:fs';
 import { generateBuilds } from '../src/generator';
-import { computeCoreSet, validateBuild } from '../src/validation/zergggy';
+import { computeCoreSet, validateBuild } from '../src/validation/heldout';
 import { personalInsight } from '../src/personal';
 
 const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
@@ -22,7 +22,8 @@ if (asJson) {
 }
 const fmt = (s: number) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 let core = null as ReturnType<typeof computeCoreSet> | null;
-if (heroId === 1) core = computeCoreSet(read('zergggy/purchases.json'), items);
+const vset = read('manifest.json').validation_sets?.find((v: any) => v.hero_id === heroId);
+if (vset) core = computeCoreSet(read(vset.file), items);
 const insight = personalInsight(read('user/history.json'), heroId);
 console.log(`# ${hero.name} — ${builds.length} builds. User budget ${insight.budget} souls (median NW), median length ${fmt(insight.medianDurationS)}`);
 const pop = builds[0]?.population;
@@ -34,7 +35,7 @@ for (const b of builds) {
   console.log('  abilities: ' + b.abilityOrder.map((s) => `${s.ability.name}[${s.kind}]`).join(' > '));
 }
 if (core) {
-  console.log(`\n# Zergggy core set (${core.matches} matches, ${core.wins} wins):`);
+  console.log(`\n# ${core.player}'s ${core.hero} core set (${core.matches} matches, ${core.wins} wins):`);
   for (const c of core.core) console.log(`  ${c.item.name.padEnd(24)} ${(c.frequency * 100).toFixed(0)}%  median buy ${fmt(c.medianBuyTimeS)}`);
   console.log(`  experiments (<30%): ${core.experiments.map((c) => `${c.item.name} ${(c.frequency * 100).toFixed(0)}%`).join(', ')}`);
 }

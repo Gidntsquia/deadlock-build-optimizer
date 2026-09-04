@@ -86,15 +86,30 @@ From `ability-order-stats`: sequences restricted to the hero's 4 signature abili
 `shrunkWR × ln(1 + matches)`; the top sequence is used . Each entry is decoded as
 `unlock` (first appearance) then `T1/T2/T3` upgrade tiers. Names and icons come from the abilities asset.
 
-## Zergggy validation (`src/validation/zergggy.ts`) – held-out
+## Held-out validation (`src/validation/heldout.ts`)
 
-Runs after generation; the only module that reads `public/data/zergggy/`.
+Runs after generation; the only module that reads `public/data/validation/`. Three (top player, hero) sets
+are listed in `manifest.json` and fetched by `node scripts/fetch-data.mjs --validation-only`:
 
-* **Core set**: items bought in ≥ 30 % of his 30 sampled matches, with wins weighted 1.5× and losses 1×.
-  Items under 30 % are his experiments and are excluded.
+| set | account | why |
+|---|---|---|
+| Zergggy / Infernus | 35187362 | original brief |
+| Deathy / Lash | 87624911 (Eternus, 855 Lash games; the other "Deathy" account has none) | Lash main |
+| Zergggy / Mina | 35187362 | same player, second hero |
+
+Results, single Recommended build, 30 matches each:
+
+| set | agreement | core items hit |
+|---|---|---|
+| Zergggy / Infernus | 66 % | 11 / 21 |
+| Deathy / Lash | 48 % | 5 / 21 |
+| Zergggy / Mina | 64 % | 10 / 20 |
+
+* **Core set**: items bought in ≥ 30 % of the player's 30 sampled matches, with wins weighted 1.5× and
+  losses 1×. Items under 30 % are their experiments and are excluded.
 * **Agreement** = 0.7 × overlap + 0.3 × order.
   Overlap = F1 of the build's item set vs. the core set (precision × recall harmonic mean).
-  Order = fraction of shared-item pairs whose order in the build matches the order of his median buy times.
+  Order = fraction of shared-item pairs whose order in the build matches the order of their median buy times.
 * The UI shows a `core` / `not core` badge on every item, the percentage, and which core items were missed.
   It is a report card for the generator, not an input; no weight was tuned on it.
 
@@ -105,6 +120,17 @@ worth (on the selected hero when ≥10 games, otherwise overall). Items whose ru
 worth are tagged **stretch**: buy them only if the game runs long.
 
 ## Judgment calls
+
+* Unpriced items count as unknown, not worthless. Items whose value is an effect the stat table does not
+  price (Mystic Burst, Extra Charge, Healbane, Mystic Vulnerability…) had `statValue` 0, so a 5 %-usage
+  stat stick like Battle Vest outscored items bought in 100 % of high-rank Lash games. They now get the
+  median stat value of priced items so popularity and win rate decide. Found on the Lash data itself
+  (100 %-usage items missing from the build), fixed before re-reading any agreement score; Infernus went
+  60 → 66 %, Lash 45 → 48 %, Mina unchanged at 64 %.
+* Lash stays the weakest set and the cause is known but deliberately not tuned away: high-rank Lash
+  win rates are heavily selection-biased for late luxury items (Crippling Headshot 63 %, Spellslinger
+  68 % at 5 % usage) which fill the weapon slots ahead of Headhunter / Headshot Booster (94–95 % usage).
+  Fixing that means changing the win-rate prior, which is exactly the weight tuning ruled out.
 
 * One build instead of three archetypes (user request). Neutral stat multipliers were chosen rather than
   picking the best-scoring archetype, so the choice does not depend on the validation score. Infernus

@@ -7,8 +7,8 @@
 //   public/data/abilities.json             abilities of active heroes (names, upgrades)
 //   public/data/analytics/<hero_id>.json   item-stats, ability-order-stats, item-permutation-stats
 //   public/data/user/history.json          the user's standard-mode match summary (personalization)
-//   public/data/zergggy/matches.json       Zergggy's Infernus match list        (VALIDATION ONLY)
-//   public/data/zergggy/purchases.json     per-match item purchases (~30 matches) (VALIDATION ONLY)
+//   public/data/validation/<account>-<hero>.json  a top player's ~30 most recent matches on one hero with
+//                                          per-match purchases                     (VALIDATION ONLY)
 //   public/data/img/{items,heroes,abilities}/  webp images so the app needs no network at all
 //   public/data/manifest.json              timestamps + counts
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -17,10 +17,15 @@ import path from 'node:path';
 const API = 'https://api.deadlock-api.com';
 const ASSETS = 'https://assets.deadlock-api.com';
 const OUT = path.resolve('public/data');
-const ZERGGGY = 35187362;
 const USER = 267836488;
-const INFERNUS = 1;
-const ZERGGGY_MATCH_TARGET = 30;
+// Held-out validation sets: (top player, hero). Never read by the generator.
+const VALIDATION_SETS = [
+  { account_id: 35187362, player: 'Zergggy', hero_id: 1, hero: 'Infernus' },
+  { account_id: 87624911, player: 'Deathy', hero_id: 31, hero: 'Lash' },
+  { account_id: 35187362, player: 'Zergggy', hero_id: 63, hero: 'Mina' },
+];
+const VALIDATION_MATCH_TARGET = 30;
+const VALIDATION_ONLY = process.argv.includes('--validation-only');
 // Analytics window: last 30 days (live data; the window is recorded in manifest.json).
 const WINDOW_DAYS = 30;
 // High-rank population: average lobby badge >= 90 (Phantom and above). Chosen as the highest bracket
@@ -151,8 +156,47 @@ async function fetchAnalytics(heroes, manifest) {
   manifest.top_min_average_badge = TOP_BADGE;
 }
 
+async function fetchValidation(manifest) {
+  console.log('6/6 held-out top-player matches (validation only)');
+  manifest.validation_sets = [];
+  const histories = new Map();
+  for (const v of VALIDATION_SETS) {
+    if (!histories.has(v.account_id)) histories.set(v.account_id, await getJson(`${API}/v1/players/${v.account_id}/match-history`));
+    const hist = histories.get(v.account_id);
+    const onHero = hist.filter((m) => m.hero_id === v.hero_id);
+    const real = onHero.filter((m) => (m.match_mode === 1 || m.match_mode === 2) && m.game_mode === 1).sort((a, b) => b.start_time - a.start_time);
+    const purchases = [];
+    for (const m of real) {
+      if (purchases.length >= VALIDATION_MATCH_TARGET) break;
+      try {
+        const meta = await getJson(`${API}/v1/matches/${m.match_id}/metadata`);
+        const mi = meta.match_info;
+        const p = (mi.players || []).find((x) => x.account_id === v.account_id);
+        if (!p) continue;
+        purchases.push({
+          match_id: m.match_id, start_time: mi.start_time, duration_s: mi.duration_s,
+          match_mode: mi.match_mode, game_mode: mi.game_mode,
+          won: p.team === mi.winning_team, net_worth: p.net_worth,
+          items: (p.items || []).map((it) => ({ item_id: it.item_id, game_time_s: it.game_time_s, sold_time_s: it.sold_time_s })),
+        });
+      } catch (e) { console.warn(`  skip match ${m.match_id}: ${e.message}`); }
+    }
+    const file = `validation/${v.account_id}-${v.hero_id}.json`;
+    await save(file, { ...v, total_hero_matches: onHero.length, matchmaking_hero_matches: real.length, matches: purchases });
+    manifest.validation_sets.push({ ...v, file, matches: purchases.length });
+  }
+  manifest.counts.validation_sets = VALIDATION_SETS.length;
+  delete manifest.counts.zergggy_matches_with_purchases;
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true });
+  if (VALIDATION_ONLY) {
+    const manifest = JSON.parse(await readFile(path.join(OUT, 'manifest.json'), 'utf8'));
+    await fetchValidation(manifest);
+    await save('manifest.json', manifest);
+    return;
+  }
   if (ANALYTICS_ONLY) {
     const manifest = JSON.parse(await readFile(path.join(OUT, 'manifest.json'), 'utf8'));
     const heroes = JSON.parse(await readFile(path.join(OUT, 'heroes.json'), 'utf8'));
@@ -205,32 +249,7 @@ async function main() {
   });
   manifest.counts.user_matches = std.length;
 
-  console.log('6/6 Zergggy Infernus matches (validation only)');
-  const zHist = await getJson(`${API}/v1/players/${ZERGGGY}/match-history`);
-  const zInf = zHist.filter((m) => m.hero_id === INFERNUS);
-  const zReal = zInf.filter((m) => (m.match_mode === 1 || m.match_mode === 2) && m.game_mode === 1)
-    .sort((a, b) => b.start_time - a.start_time);
-  await save('zergggy/matches.json', { account_id: ZERGGGY, hero_id: INFERNUS, total_infernus_matches: zInf.length, matches: zReal });
-  const purchases = [];
-  for (const m of zReal) {
-    if (purchases.length >= ZERGGGY_MATCH_TARGET) break;
-    try {
-      const meta = await getJson(`${API}/v1/matches/${m.match_id}/metadata`);
-      const mi = meta.match_info;
-      const p = (mi.players || []).find((x) => x.account_id === ZERGGGY);
-      if (!p) continue;
-      purchases.push({
-        match_id: m.match_id, start_time: mi.start_time, duration_s: mi.duration_s,
-        match_mode: mi.match_mode, game_mode: mi.game_mode,
-        won: p.team === mi.winning_team, net_worth: p.net_worth,
-        items: (p.items || []).map((it) => ({ item_id: it.item_id, game_time_s: it.game_time_s, sold_time_s: it.sold_time_s })),
-      });
-    } catch (e) {
-      console.warn(`  skip match ${m.match_id}: ${e.message}`);
-    }
-  }
-  await save('zergggy/purchases.json', { account_id: ZERGGGY, hero_id: INFERNUS, matches: purchases });
-  manifest.counts.zergggy_matches_with_purchases = purchases.length;
+  await fetchValidation(manifest);
 
   await save('manifest.json', manifest);
   console.log('done', manifest.counts);

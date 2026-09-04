@@ -33,7 +33,7 @@ export function ItemCard({ bi, isCore, onClose }: { bi: BuildItem; isCore: boole
               <span className="chip">{SLOT_LABEL[it.item_slot_type]}</span>
               <span className="chip">Tier {it.item_tier}</span>
               <span className="chip">{fmtSouls(it.cost)} souls</span>
-              {isCore !== undefined && <span className={`badge ${isCore ? 'core' : 'notcore'}`}>{isCore ? 'Zergggy core' : 'Not core'}</span>}
+              {isCore !== undefined && <span className={`badge ${isCore ? 'core' : 'notcore'}`}>{isCore ? 'Top-player core' : 'Not core'}</span>}
             </div>
           </div>
           <button className="sheet-close" onClick={onClose} aria-label="Close">×</button>
