@@ -32,14 +32,19 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
               <div className="phase-head"><span>{p.label}</span><small>{fmtSouls(rows[rows.length - 1].runningTotal)} souls by end</small></div>
               <div className="tiles">
                 {rows.map((b) => (
-                  <ItemTile key={b.item.id} item={b.item} order={b.order} isCore={validation?.badges[b.item.id]} stretch={b.runningTotal > budget} total={b.runningTotal}
-                    onClick={() => setOpen(b)} ariaLabel={`${b.item.name}, ${b.item.cost} souls, buy ${b.order}`} />
+                  <ItemTile key={b.item.id} item={b.item} order={b.order} isCore={validation?.badges[b.item.id]} stretch={b.runningTotal > budget} total={b.runningTotal} cost={b.paidCost}
+                    onClick={() => setOpen(b)} ariaLabel={`${b.item.name}, ${b.paidCost} souls${b.upgradesFrom ? ` (upgrade from ${b.upgradesFrom.name})` : ''}, buy ${b.order}`} />
                 ))}
               </div>
             </div>
           );
         })}
         <div className="board-foot"><span>{build.items.length} items</span><span className="souls">{fmtSouls(build.totalCost)}</span></div>
+        <div className="source">
+          {build.population.kind === 'top'
+            ? `Built from high-rank lobbies (average badge ${build.population.minBadge}+, Phantom and above), ${build.population.matches.toLocaleString()} matches.`
+            : `Built from all ranks, ${build.population.matches.toLocaleString()} matches. Not enough high-rank games for this hero.`}
+        </div>
         {(hasCore || hasStretch) && (
           <div className="legend">
             {hasCore && <span><i style={{ background: 'var(--good)' }} /> in Zergggy's core set</span>}
@@ -52,7 +57,7 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
       <div className="ap">
         <h2>Ability Point Order</h2>
         <div className="muted">
-          {build.abilityOrderSupport ? `Most successful sequence in aggregate data: ${build.abilityOrderSupport.matches.toLocaleString()} matches, ${(build.abilityOrderSupport.winRate * 100).toFixed(1)}% win rate.` : 'No aggregate sequence data; default unlock order.'}
+          {build.abilityOrderSupport ? `Most successful sequence in ${build.population.abilitySequenceKind === 'top' ? 'high-rank' : 'all-rank'} data: ${build.abilityOrderSupport.matches.toLocaleString()} matches, ${(build.abilityOrderSupport.winRate * 100).toFixed(1)}% win rate.` : 'No aggregate sequence data; default unlock order.'}
         </div>
         <div className="ap-grid">
           {abilities.map((a) => (

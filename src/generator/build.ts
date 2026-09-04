@@ -1,8 +1,8 @@
 // Deterministic build generator. Inputs: item catalog, hero + ability assets, and the AGGREGATE
 // analytics snapshot for the hero (item-stats, ability-order-stats, item-permutation-stats).
 // It never reads any per-player data.
-import type { Ability, Build, BuildItem, Hero, HeroAnalytics, Item, ItemStat, Phase, SlotType } from '../types';
-import { ARCHETYPES, MAX_ACTIVES, MAX_ITEMS, MIN_ITEMS, PHASE_TIME_S, SLOT_CAP, TIER_MIN, UNIT_VALUE, WEIGHTS, WIN_SHRINK_FRAC, MIN_USAGE, type Archetype } from './stats';
+import type { Ability, AnalyticsPopulation, Build, BuildItem, BuildPopulation, Hero, HeroAnalytics, Item, ItemStat, Phase, SlotType } from '../types';
+import { ARCHETYPES, MAX_ACTIVES, MAX_ITEMS, MAX_UPGRADE_STEPS, MIN_ITEMS, MIN_TOP_ITEM_MATCHES, MIN_TOP_SEQ_MATCHES, PHASE_TIME_S, SLOT_CAP, TIER_MIN, UNIT_VALUE, WEIGHTS, WIN_SHRINK_FRAC, MIN_USAGE, type Archetype } from './stats';
 import { kitProfile } from './kit';
 import { pickAbilityOrder } from './abilities';
 
@@ -23,12 +23,38 @@ export function statValue(item: Item, mult: Record<string, number>): number {
 
 interface Scored { item: Item; stat: ItemStat; pop: number; winLift: number; eff: number; kit: number; base: number }
 
+/**
+ * Picks the aggregate population to generate from. The high-rank population is preferred because
+ * the app's goal is a build that top players would recognise; it is only used when the sample is
+ * big enough for win rates and buy times to be stable. Ability sequences are chosen separately
+ * because they are much sparser than item stats.
+ */
+export function choosePopulation(analytics: HeroAnalytics): { items: AnalyticsPopulation; abilities: AnalyticsPopulation; info: BuildPopulation } {
+  const all: AnalyticsPopulation = analytics;
+  const top = analytics.top;
+  const topItemMatches = top ? Math.max(0, ...top.item_stats.map((s) => s.matches)) : 0;
+  const topSeqMatches = top ? Math.max(0, ...top.ability_order_stats.map((s) => s.matches)) : 0;
+  const useTop = !!top && topItemMatches >= MIN_TOP_ITEM_MATCHES;
+  const useTopSeq = !!top && topSeqMatches >= MIN_TOP_SEQ_MATCHES;
+  return {
+    items: useTop ? top! : all,
+    abilities: useTopSeq ? top! : all,
+    info: {
+      kind: useTop ? 'top' : 'all', minBadge: useTop ? top!.min_average_badge : null,
+      matches: useTop ? topItemMatches : Math.max(0, ...all.item_stats.map((s) => s.matches)),
+      abilitySequenceKind: useTopSeq ? 'top' : 'all',
+    },
+  };
+}
+
 export function generateBuilds(input: GeneratorInput): Build[] {
   return ARCHETYPES.map((a) => generateBuild(input, a));
 }
 
 export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
-  const { hero, abilities, items, analytics } = input;
+  const { hero, abilities, items } = input;
+  const pop = choosePopulation(input.analytics);
+  const analytics = pop.items;
   const catalog = new Map(items.filter((i) => i.shopable && !i.disabled && i.cost > 0).map((i) => [i.id, i]));
   const kit = kitProfile(hero, abilities);
   const allStats = analytics.item_stats.filter((s) => catalog.has(s.item_id) && s.matches > 0);
@@ -68,30 +94,43 @@ export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
     pair.set(`${a}:${b}`, lift); pair.set(`${b}:${a}`, lift);
   }
 
-  // 3) greedy selection under slot / tier / active caps
+  // 3) greedy selection under slot / tier / active caps.
+  // Upgrade chains: an item and the item it upgrades into may BOTH be in the build (buy the
+  // component early, upgrade later, as the in-game shop does). The upgrade takes over the
+  // component's slot and only its incremental cost is paid. Slot and item caps count "final"
+  // items only: a component that is later upgraded does not use a slot of its own.
   const chosen: { s: Scored; score: number; reasons: string[] }[] = [];
   const slotCount: Record<SlotType, number> = { weapon: 0, vitality: 0, spirit: 0 };
   const tierCount: Record<number, number> = {};
-  let actives = 0;
+  let actives = 0, finals = 0;
   const has = (id: number) => chosen.some((c) => c.s.item.id === id);
-  const componentOf = new Set<string>();
-  const byClass = new Map(items.map((i) => [i.class_name, i.id]));
+  // component class -> the chosen upgrade that consumes it (a component can only be upgraded once)
+  const consumed = new Map<string, string>();
+  const chosenClasses = () => new Set(chosen.map((c) => c.s.item.class_name));
+  // returns the [component, upgrade] pair this item would form with an already chosen item, if any
+  const chainPair = (it: Item): [string, string] | null => {
+    const have = chosenClasses();
+    const upgradeOfIt = chosen.find((c) => c.s.item.component_items.includes(it.class_name) && !consumed.has(it.class_name) && ![...consumed.values()].includes(c.s.item.class_name));
+    if (upgradeOfIt) return [it.class_name, upgradeOfIt.s.item.class_name];
+    const comp = it.component_items.find((c) => have.has(c) && !consumed.has(c));
+    return comp ? [comp, it.class_name] : null;
+  };
 
   const tierShortfall = () => Object.entries(TIER_MIN).filter(([t, min]) => (tierCount[+t] ?? 0) < min).map(([t]) => +t);
 
-  while (chosen.length < MAX_ITEMS) {
+  while (finals < MAX_ITEMS && chosen.length < MAX_ITEMS + MAX_UPGRADE_STEPS) {
     const need = tierShortfall();
-    const forcedTier = chosen.length >= MAX_ITEMS - need.length * 2 ? need : []; // fill cheap tiers before we run out of room
-    let best: { s: Scored; score: number; reasons: string[] } | null = null;
+    const forcedTier = finals >= MAX_ITEMS - need.length * 2 ? need : []; // fill cheap tiers before we run out of room
+    let best: { s: Scored; score: number; reasons: string[]; inChain: boolean; chain: [string, string] | null } | null = null;
     for (const s of scored) {
       const it = s.item;
       if (has(it.id)) continue;
-      if (slotCount[it.item_slot_type] >= SLOT_CAP) continue;
+      // part of an upgrade chain already in the build: shares that slot instead of taking a new one
+      const chain = chainPair(it);
+      const inChain = !!chain;
+      if (!inChain && slotCount[it.item_slot_type] >= SLOT_CAP) continue;
       if (it.is_active_item && actives >= MAX_ACTIVES) continue;
       if (forcedTier.length && !forcedTier.includes(it.item_tier)) continue;
-      // never take an item together with one of its own components (it replaces it)
-      if (it.component_items.some((c) => has(byClass.get(c) ?? -1))) continue;
-      if (componentOf.has(it.class_name)) continue;
       let syn = 0, n = 0;
       for (const c of chosen) { const l = pair.get(`${it.id}:${c.s.item.id}`); if (l !== undefined) { syn += l; n++; } }
       syn = n ? syn / n : 0;
@@ -103,18 +142,15 @@ export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
         if (s.eff > 0.6) reasons.push('high stat value per soul for this archetype');
         if (s.kit > 0.6) reasons.push(`scales ${hero.name}'s kit`);
         if (syn > 0.2) reasons.push('wins more alongside items already in the build');
-        best = { s, score, reasons };
+        best = { s, score, reasons, inChain, chain };
       }
     }
     if (!best) break;
     chosen.push(best);
     const it = best.s.item;
-    slotCount[it.item_slot_type]++;
+    if (best.chain) consumed.set(best.chain[0], best.chain[1]); else { slotCount[it.item_slot_type]++; finals++; }
     tierCount[it.item_tier] = (tierCount[it.item_tier] ?? 0) + 1;
     if (it.is_active_item) actives++;
-    for (const c of it.component_items) componentOf.add(c);
-    // items that upgrade INTO an already chosen item are also excluded
-    for (const o of items) if (o.component_items.includes(it.class_name)) componentOf.add(o.class_name);
   }
   if (chosen.length < MIN_ITEMS) {
     // relax slot caps: take best remaining by score
@@ -124,23 +160,35 @@ export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
     }
   }
 
-  // 4) buy order = the hero's average purchase time from the aggregate stats, tie-break cost then id
+  // 4) buy order = the hero's average purchase time from the aggregate stats, tie-break cost then id.
+  // A component is always listed before the item that upgrades from it.
   chosen.sort((a, b) => a.s.stat.avg_buy_time_s - b.s.stat.avg_buy_time_s || a.s.item.cost - b.s.item.cost || a.s.item.id - b.s.item.id);
+  for (let i = 0; i < chosen.length; i++) {
+    const compClass = [...consumed].find(([, up]) => up === chosen[i].s.item.class_name)?.[0];
+    const j = compClass ? chosen.findIndex((c, k) => k > i && c.s.item.class_name === compClass) : -1;
+    if (j > i) { const [comp] = chosen.splice(j, 1); chosen.splice(i, 0, comp); }
+  }
   let running = 0;
+  const byClass = new Map(chosen.map((c) => [c.s.item.class_name, c.s.item]));
   const buildItems: BuildItem[] = chosen.map((c, i) => {
-    running += c.s.item.cost;
+    const compClass = [...consumed].find(([, up]) => up === c.s.item.class_name)?.[0];
+    const upgradesFrom = compClass ? byClass.get(compClass) : undefined;
+    const paidCost = c.s.item.cost - (upgradesFrom?.cost ?? 0);
+    running += paidCost;
     const t = c.s.stat.avg_buy_time_s;
     const phase: Phase = t < PHASE_TIME_S.early ? 'early' : t < PHASE_TIME_S.mid ? 'mid' : 'late';
-    return { item: c.s.item, phase, order: i + 1, runningTotal: running, score: c.score, reasons: c.reasons, usageRate: c.s.pop, winRate: c.s.stat.wins / c.s.stat.matches, avgBuyTimeS: t };
+    const reasons = upgradesFrom ? [`upgrades ${upgradesFrom.name} already in the build; pays only the ${paidCost} soul difference`, ...c.reasons] : c.reasons;
+    return { item: c.s.item, phase, order: i + 1, runningTotal: running, paidCost, upgradesFrom, score: c.score, reasons, usageRate: c.s.pop, winRate: c.s.stat.wins / c.s.stat.matches, avgBuyTimeS: t };
   });
   // guarantee every phase has at least one item (fallback: split by thirds)
   const phases = new Set(buildItems.map((b) => b.phase));
   if (phases.size < 3) buildItems.forEach((b, i) => { b.phase = i < buildItems.length / 3 ? 'early' : i < (2 * buildItems.length) / 3 ? 'mid' : 'late'; });
 
-  const ab = pickAbilityOrder(hero, abilities, analytics.ability_order_stats);
+  const ab = pickAbilityOrder(hero, abilities, pop.abilities.ability_order_stats);
   return {
     key: arch.key, name: arch.name, tagline: arch.tagline, heroId: hero.id,
     items: buildItems, totalCost: running,
     abilityOrder: ab.steps, abilityOrderSupport: ab.support,
+    population: pop.info,
   };
 }

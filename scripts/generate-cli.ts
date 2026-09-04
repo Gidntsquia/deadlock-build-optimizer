@@ -25,10 +25,12 @@ let core = null as ReturnType<typeof computeCoreSet> | null;
 if (heroId === 1) core = computeCoreSet(read('zergggy/purchases.json'), items);
 const insight = personalInsight(read('user/history.json'), heroId);
 console.log(`# ${hero.name} — ${builds.length} builds. User budget ${insight.budget} souls (median NW), median length ${fmt(insight.medianDurationS)}`);
+const pop = builds[0]?.population;
+if (pop) console.log(`population: ${pop.kind === 'top' ? `high-rank lobbies (avg badge >= ${pop.minBadge})` : 'all ranks'}, ${pop.matches.toLocaleString()} matches on the most-bought item; ability sequences from ${pop.abilitySequenceKind === 'top' ? 'high-rank' : 'all-rank'} data`);
 for (const b of builds) {
   const v = core ? validateBuild(b, core) : null;
   console.log(`\n## ${b.name}  total ${b.totalCost}${v ? `  | agreement ${(v.agreement * 100).toFixed(0)}% (overlap ${(v.overlap * 100).toFixed(0)}%, order ${(v.order * 100).toFixed(0)}%, ${v.sharedCount}/${core!.core.length} core)` : ''}`);
-  for (const i of b.items) console.log(`  ${String(i.order).padStart(2)} ${i.phase.padEnd(5)} ${i.item.name.padEnd(24)} T${i.item.item_tier} ${i.item.item_slot_type.padEnd(8)} ${String(i.item.cost).padStart(5)} Σ${String(i.runningTotal).padStart(6)}  ${fmt(i.avgBuyTimeS)} wr${(i.winRate * 100).toFixed(1)} use${(i.usageRate * 100).toFixed(0)} sc${i.score.toFixed(2)} ${v ? (v.badges[i.item.id] ? 'CORE' : '-') : ''}`);
+  for (const i of b.items) console.log(`  ${String(i.order).padStart(2)} ${i.phase.padEnd(5)} ${i.item.name.padEnd(24)} T${i.item.item_tier} ${i.item.item_slot_type.padEnd(8)} ${String(i.paidCost).padStart(5)}${i.upgradesFrom ? '↑' : ' '}Σ${String(i.runningTotal).padStart(6)}  ${fmt(i.avgBuyTimeS)} wr${(i.winRate * 100).toFixed(1)} use${(i.usageRate * 100).toFixed(0)} sc${i.score.toFixed(2)} ${v ? (v.badges[i.item.id] ? 'CORE' : '-') : ''}`);
   console.log('  abilities: ' + b.abilityOrder.map((s) => `${s.ability.name}[${s.kind}]`).join(' > '));
 }
 if (core) {

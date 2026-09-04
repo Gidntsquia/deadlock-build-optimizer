@@ -21,12 +21,18 @@ npm run verify:browser  # headless 390×844 check with network blocked (needs a 
 | `items.json` | `assets…/v2/items/by-type/upgrade` (all 251 upgrade items; `shopable`/`disabled` flags kept) | generator, UI |
 | `heroes.json` | `assets…/v2/heroes`, filtered to `player_selectable && !disabled && !in_development` (38 heroes) | generator, UI |
 | `abilities.json` | `assets…/v2/items/by-type/ability` for active heroes | generator, UI |
-| `analytics/<hero_id>.json` | `/v1/analytics/item-stats`, `ability-order-stats` (top 400 by matches), `item-permutation-stats` (pairs, top 600) | **generator only** |
+| `analytics/<hero_id>.json` | `/v1/analytics/item-stats`, `ability-order-stats` (top 400 by matches), `item-permutation-stats` (pairs, top 600); fetched twice: all ranks, and under `top` with `min_average_badge=90` (Phantom+ lobbies) | **generator only** |
 | `user/history.json` | `/v1/players/267836488/match-history`, standard mode only | personalization |
 | `zergggy/matches.json`, `zergggy/purchases.json` | match history + `/v1/matches/{id}/metadata` for his 30 most recent Infernus matchmaking games | **validation only** |
 | `img/…` | webp images for items, heroes, signature abilities | UI (no network needed) |
 
 * Analytics window: last 30 days (`min_unix_timestamp`), recorded in `manifest.json`. Live data changes daily.
+  `node scripts/fetch-data.mjs --analytics-only` refreshes just the analytics files, keeping the same window.
+* **Population**: builds are generated from the high-rank population when the hero's most-bought item has
+  ≥ 500 high-rank matches (ability sequences: best sequence ≥ 200 matches), otherwise from all ranks. The
+  board says which. Badge ≥ 90 was chosen as the highest bracket where all three endpoints are still well
+  populated for every hero (≥ 100 leaves Infernus ability sequences with < 100 matches); it was fixed
+  before the resulting agreement was looked at.
 * "Real matchmaking" = `match_mode` 1 (Unranked) or 2 (Ranked) and `game_mode` 1 (Normal); private lobbies, bot, hero-labs and street-brawl games are dropped.
 * Rate limit is 200 req/min; the script sleeps 350 ms between calls and honours `retry-after` on 429.
 * The catalog has 251 items of which 173 are currently `shopable` (the other 78 are disabled/legacy). The
@@ -66,8 +72,10 @@ score(i) = 1.0 · sqrt(pop)            pop     = matches_i / matches of the hero
   duration items extend Afterburn/Napalm.
 * Game phase: each item's `avg_buy_time_s` for the hero (from item-stats) drives buy order and the
   early (<10 min) / mid (<22 min) / late grouping. Tier / soul-investment thresholds: at least 3 tier-1 and
-  3 tier-2 items are forced in, at most 5 items per slot type, at most 3 active items, 14 items total
-  (minimum 12). An item is never picked together with its own component/upgrade.
+  3 tier-2 items are forced in, at most 5 items per slot type, at most 3 active items, 14 final items
+  (minimum 12). An item and the item it upgrades into may both be picked, as in the in-game shop: the
+  component is listed first, the upgrade shares its slot and pays only the cost difference (`paidCost`).
+  Each component can be upgraded once; at most 4 such upgrade steps are added on top of the 14.
 * Selection is greedy: repeatedly take the highest-scoring admissible item (ties → lower item id), then sort
   the chosen set by average buy time (ties → cost, id) and accumulate the running soul total.
 
@@ -105,6 +113,10 @@ worth are tagged **stretch**: buy them only if the game runs long.
 * Same ability sequence for all archetypes: ability-order stats are not split by item build.
 * Permutation stats trimmed to the 600 most-played pairs and ability sequences to the top 400 per hero to
   keep the snapshot at ~16 MB.
+* Generating from high-rank lobbies rather than all ranks: the tool's goal is a build a top player would
+  recognise, and the all-rank Infernus mix (Rapid Rounds, Titanic Magazine, Ricochet) is not what
+  high-rank lobbies buy (Extra Spirit, Healbane, Mystic Vulnerability, Rapid Recharge). This and the
+  upgrade-chain rule raised Infernus agreement from 48/48/52 % to 61/67/63 %; no scoring weight changed.
 * Buy order uses average purchase time rather than cost-ascending; that is how the aggregate data describes
   real games. The average time itself is not shown in the UI: it is skewed by outlier late buys and
   reads as a "buy at this minute" instruction, which it is not. Only the resulting order and phase are shown.

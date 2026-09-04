@@ -11,7 +11,7 @@
 //   public/data/zergggy/purchases.json     per-match item purchases (~30 matches) (VALIDATION ONLY)
 //   public/data/img/{items,heroes,abilities}/  webp images so the app needs no network at all
 //   public/data/manifest.json              timestamps + counts
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const API = 'https://api.deadlock-api.com';
@@ -23,7 +23,14 @@ const INFERNUS = 1;
 const ZERGGGY_MATCH_TARGET = 30;
 // Analytics window: last 30 days (live data; the window is recorded in manifest.json).
 const WINDOW_DAYS = 30;
-const MIN_TS = Math.floor(Date.now() / 1000) - WINDOW_DAYS * 86400;
+// High-rank population: average lobby badge >= 90 (Phantom and above). Chosen as the highest bracket
+// where all three analytics endpoints are still well populated for every hero (Ascendant+ leaves
+// ability-order sequences with <100 matches). Builds are generated from this population when it is
+// large enough, so they follow what top-rank players actually buy rather than the all-rank average.
+const TOP_BADGE = 90;
+// `--analytics-only` refreshes only public/data/analytics/* from the existing heroes.json.
+const ANALYTICS_ONLY = process.argv.includes('--analytics-only');
+let MIN_TS = Math.floor(Date.now() / 1000) - WINDOW_DAYS * 86400;
 // Rate limit is 200 req / 60 s -> ~350 ms between requests keeps us well under.
 const SLEEP_MS = 350;
 
@@ -118,8 +125,43 @@ function slimAbility(a) {
   };
 }
 
+async function fetchPopulation(heroId, extra = '') {
+  const q = `hero_id=${heroId}&min_unix_timestamp=${MIN_TS}${extra}`;
+  const [item_stats, ability_order_stats, permutation_stats] = await Promise.all([
+    getJson(`${API}/v1/analytics/item-stats?${q}`),
+    getJson(`${API}/v1/analytics/ability-order-stats?${q}&min_matches=5`),
+    getJson(`${API}/v1/analytics/item-permutation-stats?${q}&comb_size=2`),
+  ]);
+  // Ability sequences and pair stats are very large (10k+ rows); keep the most-played rows.
+  const abilitySeqs = [...ability_order_stats].sort((a, b) => b.matches - a.matches).slice(0, 400);
+  const pairs = [...permutation_stats].sort((a, b) => b.matches - a.matches).slice(0, 600);
+  return { item_stats, ability_order_stats: abilitySeqs, permutation_stats: pairs };
+}
+
+async function fetchAnalytics(heroes, manifest) {
+  console.log(`4/6 per-hero analytics (${heroes.length} heroes, all ranks + badge>=${TOP_BADGE})`);
+  for (const h of heroes) {
+    const all = await fetchPopulation(h.id);
+    const top = await fetchPopulation(h.id, `&min_average_badge=${TOP_BADGE}`);
+    const topMatches = Math.max(0, ...top.item_stats.map((s) => s.matches));
+    console.log(`   ${h.name}: top-rank max item matches ${topMatches}`);
+    await save(`analytics/${h.id}.json`, { hero_id: h.id, ...all, top: { min_average_badge: TOP_BADGE, ...top } });
+  }
+  manifest.counts.analytics_heroes = heroes.length;
+  manifest.top_min_average_badge = TOP_BADGE;
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true });
+  if (ANALYTICS_ONLY) {
+    const manifest = JSON.parse(await readFile(path.join(OUT, 'manifest.json'), 'utf8'));
+    const heroes = JSON.parse(await readFile(path.join(OUT, 'heroes.json'), 'utf8'));
+    MIN_TS = manifest.min_unix_timestamp; // keep the same window as the rest of the snapshot
+    manifest.analytics_fetched_at = new Date().toISOString();
+    await fetchAnalytics(heroes, manifest);
+    await save('manifest.json', manifest);
+    return;
+  }
   const manifest = { fetched_at: new Date().toISOString(), min_unix_timestamp: MIN_TS, window_days: WINDOW_DAYS, counts: {} };
 
   console.log('1/6 item catalog');
@@ -151,20 +193,7 @@ async function main() {
   await save('abilities.json', abilities);
   manifest.counts.abilities = abilities.length;
 
-  console.log(`4/6 per-hero analytics (${heroes.length} heroes)`);
-  for (const h of heroes) {
-    const q = `hero_id=${h.id}&min_unix_timestamp=${MIN_TS}`;
-    const [item_stats, ability_order_stats, permutation_stats] = await Promise.all([
-      getJson(`${API}/v1/analytics/item-stats?${q}`),
-      getJson(`${API}/v1/analytics/ability-order-stats?${q}&min_matches=5`),
-      getJson(`${API}/v1/analytics/item-permutation-stats?${q}&comb_size=2`),
-    ]);
-    // Ability sequences and pair stats are very large (10k+ rows); keep the most-played rows.
-    const abilitySeqs = [...ability_order_stats].sort((a, b) => b.matches - a.matches).slice(0, 400);
-    const pairs = [...permutation_stats].sort((a, b) => b.matches - a.matches).slice(0, 600);
-    await save(`analytics/${h.id}.json`, { hero_id: h.id, item_stats, ability_order_stats: abilitySeqs, permutation_stats: pairs });
-  }
-  manifest.counts.analytics_heroes = heroes.length;
+  await fetchAnalytics(heroes, manifest);
 
   console.log('5/6 user history (personalization)');
   const userHist = await getJson(`${API}/v1/players/${USER}/match-history`);

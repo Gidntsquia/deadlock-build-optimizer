@@ -41,12 +41,18 @@ export interface ItemStat {
 }
 export interface AbilityOrderStat { abilities: number[]; wins: number; losses: number; matches: number; players: number }
 export interface PairStat { item_ids: number[]; wins: number; losses: number; matches: number }
-export interface HeroAnalytics { hero_id: number; item_stats: ItemStat[]; ability_order_stats: AbilityOrderStat[]; permutation_stats: PairStat[] }
+export interface AnalyticsPopulation { item_stats: ItemStat[]; ability_order_stats: AbilityOrderStat[]; permutation_stats: PairStat[] }
+/** Aggregate analytics for one hero: all ranks, plus (optionally) the high-rank population. */
+export interface HeroAnalytics extends AnalyticsPopulation { hero_id: number; top?: AnalyticsPopulation & { min_average_badge: number } }
+/** Which aggregate population a build was generated from. */
+export interface BuildPopulation { kind: 'top' | 'all'; minBadge: number | null; matches: number; abilitySequenceKind: 'top' | 'all' }
 
 export type Phase = 'early' | 'mid' | 'late';
 
 export interface BuildItem {
   item: Item; phase: Phase; order: number; runningTotal: number;
+  paidCost: number;            // cost after crediting a component already in the build
+  upgradesFrom?: Item;         // the component this item upgrades (if in the build)
   score: number; reasons: string[];
   usageRate: number; winRate: number; avgBuyTimeS: number;
 }
@@ -55,4 +61,5 @@ export interface Build {
   key: string; name: string; tagline: string; heroId: number;
   items: BuildItem[]; totalCost: number;
   abilityOrder: AbilityStep[]; abilityOrderSupport: { matches: number; winRate: number } | null;
+  population: BuildPopulation;
 }

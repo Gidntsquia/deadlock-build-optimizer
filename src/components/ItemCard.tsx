@@ -60,6 +60,7 @@ export function ItemCard({ bi, isCore, onClose }: { bi: BuildItem; isCore: boole
           <h3>Why it's in this build</h3>
           <div className="kv">
             <span>Buy step</span><span>#{bi.order} · {bi.phase} game</span>
+            {bi.upgradesFrom && <><span>Upgrades</span><span>{bi.upgradesFrom.name}, pay {fmtSouls(bi.paidCost)}</span></>}
             <span>Running total after buy</span><span>{fmtSouls(bi.runningTotal)}</span>
             <span>Win rate when bought</span><span>{(bi.winRate * 100).toFixed(1)}%</span>
             <span>Relative usage</span><span>{(bi.usageRate * 100).toFixed(0)}%</span>

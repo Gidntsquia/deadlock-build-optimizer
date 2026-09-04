@@ -31,7 +31,7 @@ for (const hero of heroes) {
     for (const b of builds) {
       if (b.items.length < 12) { ok = false; why.push(`${b.name}: ${b.items.length} items`); }
       if (new Set(b.items.map((i) => i.phase)).size !== 3) { ok = false; why.push(`${b.name}: phases`); }
-      let run = 0; for (const i of b.items) { run += i.item.cost; if (i.runningTotal !== run || !i.item.shop_image_webp) { ok = false; why.push(`${b.name}: totals/image`); break; } }
+      let run = 0; for (const i of b.items) { run += i.paidCost; if (i.runningTotal !== run || !i.item.shop_image_webp) { ok = false; why.push(`${b.name}: totals/image`); break; } }
       const names = new Set(b.abilityOrder.map((s) => s.ability.name));
       if (names.size !== 4 || b.abilityOrder.filter((s) => s.kind === 'unlock').length !== 4) { ok = false; why.push(`${b.name}: abilities ${[...names]}`); }
       if (hero.id === 1 && ![...names].every((n) => infAbilities.has(n))) { ok = false; why.push('infernus names'); }
