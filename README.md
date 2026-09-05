@@ -11,6 +11,9 @@ npm run dev             # http://localhost:5173 – works offline after the fetc
 npm run build           # production build in dist/
 npm run generate [id]   # CLI: print the builds (+ validation for Infernus)
 npm run verify          # acceptance checks that don't need a browser
+npm run brawl -- …      # Street Brawl draft advisor CLI (see "Street Brawl")
+npm run brawl:see -- …  # Street Brawl screen recogniser: fixture test / read a screenshot
+npm run icon-index      # rebuild public/data/brawl-icons.json from the item icons
 npm run verify:browser  # headless 390×844 check with network blocked (needs a Playwright chromium)
 ```
 
@@ -117,6 +120,136 @@ Results, single Recommended build, 30 matches each:
   Order = fraction of shared-item pairs whose order in the build matches the order of their median buy times.
 * The UI shows a `core` / `not core` badge on every item, the percentage, and which core items were missed.
   It is a report card for the generator, not an input; no weight was tuned on it.
+
+## Street Brawl (`src/brawl/`, `scripts/brawl-cli.ts`)
+
+Street Brawl is the 4v4 best-of-5 mode with no shop: before each round the game offers three sets of three
+items and you keep one card per set, with one reroll of a set per round. `docs/street-brawl-plan.md` has the
+full plan. The draft shows **one set at a time** ("choice 1 of 3" … "3 of 3"), so live advice is per set and
+the reroll decision is made with the current set only. There are no per-slot caps in Brawl; the 4-active-item
+cap still applies. Rare cards are one tier higher than the set's normal tier; enhanced cards are the same
+item with better numbers.
+
+### Data (`node scripts/fetch-data.mjs --brawl`)
+
+| file | source |
+|---|---|
+| `brawl-config.json` | `assets…/v2/generic-data` → `street_brawl`: souls per round (5600 / 7400 / 9400 / 11600 / 14000), 50 s buy phase, one reroll per round, and per round the normal / rare tier of each set plus the weight tables for how many of the nine cards are rare-bumped or enhanced |
+| `analytics/brawl/<hero_id>.json` | `/v1/analytics/item-stats` and `item-permutation-stats` (pairs, top 600) with `game_mode=street_brawl`, plus `vs`: item-stats with `enemy_hero_ids=<id>` for every other hero (the counter term). One all-rank population: the API returns 400 for a badge filter in this mode |
+| `validation/brawl-267836488.json` | the user's own Street Brawl matches (`game_mode` 4) from `/v1/matches/{id}/metadata`: per-match picks with times, round durations, both teams' heroes. **Validation only** |
+
+Match metadata records what was picked and in which round, never the three cards that were offered.
+The 23 tier-5 legendaries exist only in this mode; they are in `items.json` with icons (`shopable: false`,
+cost 9999) and the brawl engine keeps them.
+
+### Scoring
+
+`adviseDraft({ round, owned, enemies, sets })` scores every card and returns the jointly best one-per-set
+choice and a reroll suggestion. Everything is free and the order is fixed by round, so the normal-mode cost
+efficiency and buy-time terms are gone:
+
+```
+score(card) = 1.0 · sqrt(pop)      pop     = matches / matches of the most-picked item OF THE SAME TIER
+            + 1.0 · winLift        (shrunkWR − heroMeanWR) × 10 × pop, K = max(200, 5 % of the tier's top item)
+            + 0.3 · kit            soul-equivalent stat value under the hero's kit multipliers, relative to
+                                   the tier median, clipped at 2× (unpriced items = tier median, i.e. neutral)
+            + 0.2 · (tier − 1)     a rare (tier-bumped) card beats a normal card of the same rank
+            + 0.5 · counter        mean over known enemies of (lift vs that enemy − lift vs the field) × 10 × pop
+            + 0.5 · synergy        mean pair win-lift (×10) with items already held (pairs with ≥ 20 matches)
+            + 0.1 · [active]       − 0.5 if 4 actives are already held (Brawl keeps the 4-active cap)
+            + 0.15 · [upgrades an item you hold]
+            + 0.15 · [enhanced]    and kit × 1.25 (the enhanced multiplier is UNVERIFIED; the API has no numbers)
+```
+
+* Popularity and win-lift are normalised **within tier** because a tier-4 item is picked less often than a
+  tier-1 item mostly because it is offered less often. Cross-tier usage says little about quality.
+* With several sets given at once (CLI, offline) the pick is the best of the one-per-set combinations,
+  adding pair synergy between the picks themselves; two copies of the same item in one round are penalised.
+  The app passes the single visible set.
+* Reroll: for each set, the expected best base score of three fresh cards is computed exactly from the
+  round's tier pool (`E[max of 3] = Σ s_(k) (F_k³ − F_{k−1}³)` over the score-sorted pool, mixing the normal
+  and rare tier by the config's rare chance per card). The set whose best card falls more than 0.1 below
+  that expectation is the reroll candidate.
+
+```
+npm run brawl -- --hero 1 --pool                                   # top items per tier, sanity check
+npm run brawl -- --hero 1 --round 2 --owned "Extra Charge,Duration Extender" --enemies "Lash,Seven" \
+    --set "Improved Spirit,Enchanter's Emblem,Swift Striker" --set "Superior Duration,Toxic Bullets,Warp Stone+"
+npm run brawl -- --validate [--hero 1]                             # held-out pick percentile
+```
+
+`+` after a name marks an enhanced card.
+
+### Held-out check (`src/validation/brawl.ts`)
+
+Offers are unrecorded, so agreement with a final item set cannot be measured per decision. Instead, for
+every pick in the user's own brawl matches: where does the picked item rank, by engine score against what
+was held before that round and the actual enemy team, among all items of its tier with brawl data? A random
+picker averages 50 %; a player who always takes the engine's favourite of three random cards averages about
+75 %. Popularity alone is reported next to it as the baseline. Picks are grouped into rounds by 40 s gaps
+between purchase times. The numbers are printed by `npm run verify` and `npm run brawl -- --validate`.
+
+### Screen reader (`src/brawl/recognise.ts`, `scripts/brawl-recognise.ts`)
+
+Pure pixel code shared by the browser and the fixture test. On a 2560×1440 draft screen the three card icons
+are centred at (712, 855), (1280, 527) and (1848, 855), 185 px square; other sizes scale linearly. Each
+icon is located by searching ±24 px and four scales around its anchor, box-filtered to 24×24 and compared by
+normalised cross-correlation (per channel, the tier-numeral corner masked) against `brawl-icons.json`, which
+holds every non-disabled item icon flattened on the card colour (`npm run icon-index`). The tier numeral
+(I–V) is read by counting dark strokes in the icon's top-right corner, which also separates items that share
+an icon file (Spirit Armor / Spirit Resilience). "RARE!" is teal text above the icon and "ENHANCED" a blue box
+under the name; both are detected by colour fraction in their region. A card counts as present when its icon
+scores ≥ 0.75, or ≥ 0.45 with a readable numeral; the scoreboard screenshots read as no cards.
+
+The same capture also reads the labels: "ROUND n" above the timer and "CHOICE n OF 3" under the title are
+thresholded on their text colour, cropped to the digit's bounding box, resampled onto an 8×12 grid and matched
+against digit templates taken from the screenshots (round 5 is hand-drawn: no screenshot of it yet; an unreadable
+digit leaves the tab's own counter alone). The eight portraits in the top bar are matched, with a circular mask,
+against each hero's card art cropped to the head (`brawl-icons.json` carries those too); the side holding the
+selected hero is the player's team and the other four are the enemies. A hovered portrait (teal highlight)
+reads as unknown, so the enemy list fills in over a few frames. 87/90 labels on the 9 screen fixtures.
+
+```
+npm run brawl:see -- --fixtures            # 27 labelled card crops from 9 screenshots: item, tier, rare, enhanced
+npm run brawl:see -- --screens             # 9 screen fixtures: round, choice and the eight hero portraits
+npm run brawl:see -- screenshots/x.png     # name the three cards of a full screenshot
+npm run brawl:see -- --save-fixture s7 screenshots/brawl/s7.png "Mystic Regeneration,Extended Magazine,Spirit Strike"
+```
+
+Fixture accuracy is 27/27 (target ≥ 95 %); `npm run verify` runs the fixture check. The screenshots
+themselves stay out of git, only the card crops under `scripts/fixtures/brawl-cards/` are committed.
+
+### Brawl tab in the app
+
+The header switch (or `#brawl`) opens the advisor: pick hero, then either **Capture game screen + overlay** or
+type the three cards. The capture (`getDisplayMedia`) hands frames to a Web Worker that runs the recogniser, so
+the page never blocks; a frame is skipped while the previous one is still being read (about 200-300 ms for the
+three cards at 2560×1440, the labels and hero bar are read only when a new set of cards is accepted). A read
+is accepted once two consecutive frames agree. The same click opens the **always-on-top overlay** (Document
+Picture-in-Picture, Chrome/Edge) with the advice, so the game can stay in front: run Deadlock in borderless
+windowed mode, exclusive fullscreen hides the overlay.
+
+Picks are read from the screen too: the draft screen's bottom-left inventory grid (two rows of five icons) is
+matched against the icon index, and a new entry that was on offer is the card just taken. The grid is the
+source of truth for the owned list while the capture runs, so nothing needs clicking between picks; the card
+buttons remain as a fallback. An empty slot with a background line through it can look like a dark streaky
+icon, so an item that was never offered in this game needs a near-perfect match (≥ 0.85) while offered or owned
+items need ≥ 0.6. Nothing is sent to the game; only pixels are read.
+
+**Phone display** (for exclusive fullscreen, where no overlay can show). The Brawl tab's **Phone display**
+button shows a QR code and an 8-letter code. Scan the QR code with the phone, or open `phone.html` on the site
+and type the code. The phone then shows the ranked cards, the re-roll verdict and the "Took X" line, updated
+whenever the advice changes, with its screen kept awake. Nothing to install, no port forwarding, works on mobile
+data: the app publishes the advice (hero, cards, scores, no account data) to a random topic on the public
+[ntfy.sh](https://ntfy.sh) service and `public/phone.html` subscribes to it over Server-Sent Events. The topic
+is `brawl-<code>`; the code is kept in localStorage while the display is on and dropped when it is turned off.
+A self-hosted ntfy server can be used by setting localStorage `brawl-ntfy` to its URL (the browser check does
+this with `scripts/mock-ntfy.mjs`). The capture itself keeps working in exclusive fullscreen; only the overlay is
+hidden.
+
+Recogniser speed: icon matching is coarse-to-fine, the nominal window is scored against all 173 icons and the
+position / scale search runs on the top 12 only; hero portraits shortlist from five windows. Same 27/27 cards and
+87/90 labels as the exhaustive search, at about a fifth of the time.
 
 ## Personalization
 

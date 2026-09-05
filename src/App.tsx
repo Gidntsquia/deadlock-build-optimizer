@@ -5,6 +5,7 @@ import { generateBuilds } from './generator';
 import { computeCoreSet, loadHeldout, validateBuild, type CoreSet, type HeldoutPurchases } from './validation/heldout';
 import { personalInsight, type UserHistory } from './personal';
 import { BuildView } from './components/BuildView';
+import { BrawlView } from './components/BrawlView';
 
 const INFERNUS = 1;
 
@@ -18,6 +19,8 @@ export default function App() {
   const [heroId, setHeroId] = useState(INFERNUS);
   const [analytics, setAnalytics] = useState<HeroAnalytics | null>(null);
   const [tab, setTab] = useState(0);
+  const [mode, setMode] = useState<'build' | 'brawl'>(() => (location.hash === '#brawl' ? 'brawl' : 'build'));
+  useEffect(() => { history.replaceState(null, '', mode === 'brawl' ? '#brawl' : location.pathname + location.search); }, [mode]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,8 +50,12 @@ export default function App() {
       <header className="app-header">
         <img src={img(hero.images.small)} alt="" />
         <div>
-          <h1>{hero.name} build</h1>
+          <h1>{hero.name} {mode === 'brawl' ? 'Street Brawl' : 'build'}</h1>
           <div className="sub">Deadlock Build Optimizer, {manifest?.window_days}-day data fetched {manifest?.fetched_at.slice(0, 10)}</div>
+        </div>
+        <div className="mode-switch" role="tablist" aria-label="Mode">
+          <button role="tab" aria-selected={mode === 'build'} className={mode === 'build' ? 'active' : ''} onClick={() => setMode('build')}>Build</button>
+          <button role="tab" aria-selected={mode === 'brawl'} className={mode === 'brawl' ? 'active' : ''} onClick={() => setMode('brawl')}>Brawl</button>
         </div>
       </header>
       <div className="hero-strip" role="tablist" aria-label="Hero">
@@ -61,8 +68,9 @@ export default function App() {
       <select className="hero-select" value={heroId} onChange={(e) => { setHeroId(Number(e.target.value)); setTab(0); }} aria-label="Select hero">
         {heroes.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
       </select>
-      {!analytics && <div className="loading">Generating builds…</div>}
-      {builds.length > 0 && (
+      {mode === 'brawl' && <BrawlView hero={hero} heroes={heroes} items={items} abilities={abilities} />}
+      {mode === 'build' && !analytics && <div className="loading">Generating builds…</div>}
+      {mode === 'build' && builds.length > 0 && (
         <>
           {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={core} insight={insight} heroName={hero.name} />}
         </>

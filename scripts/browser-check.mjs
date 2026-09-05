@@ -5,7 +5,8 @@ const require = createRequire(import.meta.url);
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 
-const server = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
+const server = spawn('node', ['node_modules/vite/bin/vite.js', 'preview', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
+const ntfyMock = spawn('node', ['scripts/mock-ntfy.mjs', '8790'], { stdio: 'ignore' }); // stand-in for ntfy.sh, which the phone display publishes to
 await new Promise((r) => setTimeout(r, 2500));
 const exe = process.env.CHROME_PATH || (await import('node:fs')).readdirSync(process.env.HOME + '/.cache/ms-playwright').filter((d) => d.startsWith('chromium_headless_shell-')).sort().map((d) => process.env.HOME + '/.cache/ms-playwright/' + d + '/chrome-headless-shell-linux64/chrome-headless-shell').find((p) => (require('node:fs')).existsSync(p));
 const browser = await chromium.launch({ executablePath: exe });
@@ -18,7 +19,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 const imgBlocked = [];
 await page.route('**/*', (route) => {
   const u = route.request().url();
-  if (u.startsWith('http://localhost:4173')) return route.continue();
+  if (u.startsWith('http://localhost:4173') || u.startsWith('http://localhost:8790')) return route.continue();
   imgBlocked.push(u); return route.abort();
 });
 let fails = 0;
@@ -98,8 +99,74 @@ try {
   const [bb, sb] = await Promise.all([page.$eval('.col-main', (e) => e.getBoundingClientRect().toJSON()), page.$eval('.col-side', (e) => e.getBoundingClientRect().toJSON())]);
   check('desktop: two columns filling the window', bb.right <= sb.left && sb.right > 1300 && bb.width > 700, `board ${Math.round(bb.width)}px, side ${Math.round(sb.width)}px`);
   await page.screenshot({ path: 'screenshots/desktop.png' });
+
+  // Street Brawl tab: manual card entry, then a fake screen capture that plays a real draft screenshot
+  await page.evaluate(() => { localStorage.setItem('brawl-phone', 'testcode'); localStorage.setItem('brawl-ntfy', 'http://localhost:8790'); }); // phone display on, pointed at the mock ntfy
+  await page.click('.mode-switch button:has-text("Brawl")');
+  await page.waitForSelector('.brawl-controls', { timeout: 15000 });
+  await page.waitForSelector('.brawl-pick select', { timeout: 15000 });
+  const brawlItems = ['Mystic Regeneration', 'Extended Magazine', 'Spirit Strike'];
+  const picks = await page.$$('.brawl-pick select');
+  for (let k = 0; k < 3; k++) await picks[k].selectOption({ label: `T1 ${brawlItems[k]}` });
+  await page.waitForSelector('.brawl-card.best', { timeout: 15000 });
+  const bestName = await page.textContent('.brawl-card.best b');
+  const cardCount = await page.$$eval('.brawl-card', (els) => els.length);
+  check('brawl: typed cards are ranked, one highlighted', cardCount === 3 && bestName.startsWith('TAKE'), bestName);
+  await tapOk('brawl');
+  // phone display: the app publishes its advice to the (mock) ntfy topic; the phone page renders it from the topic's SSE feed
+  await page.waitForFunction(() => document.querySelector('.brawl-phone img[src^="data:"]'), null, { timeout: 10000 }).catch(() => {});
+  const phoneText = await page.textContent('.brawl-phone');
+  check('brawl: phone display shows a QR code and the pairing code', phoneText.includes('testcode') && !!(await page.$('.brawl-phone img[src^="data:"]')), phoneText.trim());
+  const phone = await ctx.newPage();
+  // no request interception here: Playwright buffers an intercepted SSE stream, and the page only talks to the two local servers
+  await phone.goto('http://localhost:4173/phone.html#t=testcode&s=http://localhost:8790');
+  await phone.waitForFunction(() => document.querySelector('.card.best b')?.textContent.startsWith('TAKE'), null, { timeout: 10000 }).catch(() => {});
+  const phoneBest = await phone.$eval('.card.best b', (e) => e.textContent).catch(() => '');
+  const phoneHead = await phone.textContent('#hero');
+  const published = await (await fetch('http://localhost:8790/brawl-testcode/json')).json();
+  const state = JSON.parse(published.message ?? '{}');
+  check('brawl: phone page gets the ranked cards through ntfy', state.cards?.length === 3 && published.message.length < 4000 && phoneBest.startsWith('TAKE') && phoneHead.startsWith('Infernus · round 1, choice 1'), `${phoneHead}: ${phoneBest}, ${published.message?.length} bytes`);
+  await phone.screenshot({ path: 'screenshots/brawl-phone.png' });
+  await phone.close();
+  await page.click('.brawl-controls button:has-text("Phone display: on")');
+  await page.click('.brawl-card.best');
+  const ownedChips = await page.$$eval('.brawl .chips .chip', (els) => els.map((e) => e.textContent));
+  const choiceNow = await page.$eval('.brawl-controls select >> nth=1', (e) => e.value);
+  check('brawl: taking a card records it and moves to choice 2', ownedChips.length === 1 && choiceNow === '2', ownedChips.join(', '));
+  await page.screenshot({ path: 'screenshots/brawl-tab.png', fullPage: true });
+  if (require('node:fs').existsSync('screenshots/brawl/s13.png')) {
+    // the "game screen" is a canvas repainted from a screenshot; window.__setDraft(name) swaps the screenshot
+    await page.route('http://localhost:4173/__draft/*', (route) => route.fulfill({ body: require('node:fs').readFileSync(`screenshots/brawl/${route.request().url().split('/').pop()}`), contentType: 'image/png' }));
+    await page.evaluate(() => {
+      delete window.documentPictureInPicture; // keep the advice panel in the main document, not the overlay window
+      let im = new Image();
+      window.__setDraft = (name) => new Promise((resolve, reject) => { const n = new Image(); n.onload = () => { im = n; resolve(); }; n.onerror = () => reject(new Error('draft image')); n.src = `/__draft/${name}`; });
+      navigator.mediaDevices.getDisplayMedia = () => window.__setDraft('s13.png').then(() => {
+        const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const ctx = c.getContext('2d');
+        const draw = () => { ctx.drawImage(im, 0, 0); requestAnimationFrame(draw); }; draw();
+        return c.captureStream(10);
+      });
+    });
+    await page.click('.brawl-controls button:has-text("Capture game screen")');
+    await page.waitForFunction(() => document.querySelectorAll('.brawl-card').length === 3 && document.querySelector('.brawl-card.best b')?.textContent.includes('Arcane Surge'), null, { timeout: 30000 }).catch(() => {});
+    const seen = await page.$$eval('.brawl-card b', (els) => els.map((e) => e.textContent.replace(/^(TAKE|#\d) /, '')));
+    check('brawl: screen capture of a draft screenshot reads all three cards (with the enhanced flag)', seen.length === 3 && ['Arcane Surge', 'Reactive Barrier (enhanced)', 'Enduring Speed'].every((n) => seen.includes(n)), seen.join(' | ') || (await page.textContent('.brawl-controls .muted')));
+    const roundNow = await page.$eval('.brawl-controls select >> nth=0', (e) => e.value);
+    const choiceSeen = await page.$eval('.brawl-controls select >> nth=1', (e) => e.value);
+    const foes = await page.$$eval('.brawl-controls select[aria-label^="Enemy"]', (els) => els.map((e) => e.selectedOptions[0]?.textContent));
+    check('brawl: capture syncs round 2 / choice 1 and fills the enemy team from the hero bar', roundNow === '2' && choiceSeen === '1' && ['Pocket', 'Apollo', 'Ivy', 'Calico'].every((n) => foes.includes(n)), `round ${roundNow} choice ${choiceSeen}, enemies ${foes.join(', ')}`);
+    await page.screenshot({ path: 'screenshots/brawl-capture.png' });
+    // s14 offers Healbane; on s15 Healbane is in the inventory grid: the pick must be detected without a click
+    await page.evaluate(() => window.__setDraft('s14.png'));
+    await page.waitForFunction(() => document.querySelector('.brawl-card.best b')?.textContent.includes('Healbane') || [...document.querySelectorAll('.brawl-card b')].some((b) => b.textContent.includes('Healbane')), null, { timeout: 30000 }).catch(() => {});
+    await page.evaluate(() => window.__setDraft('s15.png'));
+    await page.waitForFunction(() => [...document.querySelectorAll('.brawl-advice .muted')].some((e) => e.textContent.includes('Took Healbane')), null, { timeout: 30000 }).catch(() => {});
+    const tookText = await page.$$eval('.brawl-advice .muted', (els) => els.map((e) => e.textContent).join(' | '));
+    const ownedNow = await page.$$eval('.chips .chip', (els) => els.map((e) => e.textContent));
+    check('brawl: the taken card is read from the inventory grid on the next screen', tookText.includes('Took Healbane') && ownedNow.includes('Healbane'), `${tookText} — owned ${ownedNow.join(', ')}`);
+  }
 } catch (e) { check('browser flow', false, String(e)); }
 check('no console errors (network disabled)', errors.length === 0, errors.slice(0, 3).join(' | '));
 console.log(`(blocked ${imgBlocked.length} external requests, e.g. images — expected offline)`);
-await browser.close(); server.kill();
+await browser.close(); server.kill(); ntfyMock.kill();
 process.exit(fails ? 1 : 0);

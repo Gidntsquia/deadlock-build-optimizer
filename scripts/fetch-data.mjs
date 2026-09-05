@@ -10,6 +10,9 @@
 //   public/data/validation/<account>-<hero>.json  a top player's ~30 most recent matches on one hero with
 //                                          per-match purchases                     (VALIDATION ONLY)
 //   public/data/img/{items,heroes,abilities}/  webp images so the app needs no network at all
+//   public/data/brawl-config.json          Street Brawl mode constants (round budgets, draft tiers/weights)
+//   public/data/analytics/brawl/<hero_id>.json  Street Brawl item-stats, pair stats, and item-stats vs every enemy hero
+//   public/data/validation/brawl-<account>.json the user's Street Brawl matches with per-round picks (VALIDATION ONLY)
 //   public/data/manifest.json              timestamps + counts
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -36,6 +39,15 @@ const WINDOW_DAYS = 30;
 const TOP_BADGE = 90;
 // `--analytics-only` refreshes only public/data/analytics/* from the existing heroes.json.
 const ANALYTICS_ONLY = process.argv.includes('--analytics-only');
+// `--brawl` refreshes only the Street Brawl snapshot (brawl-config.json, analytics/brawl/*, validation/brawl-*).
+const BRAWL_ONLY = process.argv.includes('--brawl') || process.argv.includes('--brawl-user-only');
+// `--brawl-user-only` skips brawl-config / per-hero analytics and refreshes only the user's brawl matches.
+const BRAWL_USER_ONLY = process.argv.includes('--brawl-user-only');
+const MAX_WAIT_MS = 30 * 60 * 1000;
+// Street Brawl analytics: the API has no rank filter for this mode (400 "Cannot filter by average badge"),
+// so there is one all-rank population. Enemy-filtered item-stats are fetched for every hero as the counter term.
+const BRAWL_GAME_MODE = 'street_brawl';
+const BRAWL_GAME_MODE_ID = 4; // game_mode value in match-history / match metadata
 let MIN_TS = Math.floor(Date.now() / 1000) - WINDOW_DAYS * 86400;
 // Rate limit is 200 req / 60 s -> ~350 ms between requests keeps us well under.
 const SLEEP_MS = 350;
@@ -47,7 +59,10 @@ async function getJson(url, tries = 5) {
     try {
       const res = await fetch(url, { redirect: 'follow' });
       if (res.status === 429 || res.status >= 500) {
-        const wait = Number(res.headers.get('retry-after') || 0) * 1000 || 2000 * (i + 1);
+        // retry-after can be an hour on the match-metadata endpoint; cap it and let the caller skip the row
+        // match metadata is limited to a few calls per hour per IP: honour its retry-after up to MAX_WAIT_MS there
+        const maxWait = url.includes('/metadata') ? MAX_WAIT_MS : 60000;
+        const wait = Math.min(maxWait, Number(res.headers.get('retry-after') || 0) * 1000 || 2000 * (i + 1));
         console.warn(`  ${res.status} on ${url} – waiting ${wait}ms`);
         await sleep(wait);
         continue;
@@ -64,9 +79,9 @@ async function getJson(url, tries = 5) {
 }
 
 // Downloads an image once into public/data/img/<dir>/<id>.webp and returns the app-relative path.
-async function saveImage(url, dir, id) {
+async function saveImage(url, dir, id, suffix = '') {
   if (!url) return undefined;
-  const rel = `img/${dir}/${id}.webp`;
+  const rel = `img/${dir}/${id}${suffix}.webp`;
   const f = path.join(OUT, rel);
   await mkdir(path.dirname(f), { recursive: true });
   try {
@@ -190,7 +205,77 @@ async function fetchValidation(manifest) {
   delete manifest.counts.zergggy_matches_with_purchases;
 }
 
+// One row per item, slimmed to what the counter term needs.
+const slimStat = (s) => ({ item_id: s.item_id, wins: s.wins, matches: s.matches });
+
+async function fetchBrawl(heroes, manifest) {
+  if (!BRAWL_USER_ONLY) await fetchBrawlAnalytics(heroes);
+  await fetchBrawlUser(heroes, manifest);
+}
+
+async function fetchBrawlAnalytics(heroes) {
+  console.log(`brawl 1/3 mode config`);
+  const generic = await getJson(`${ASSETS}/v2/generic-data`);
+  await save('brawl-config.json', { fetched_at: new Date().toISOString(), ...generic.street_brawl });
+  console.log(`brawl 2/3 per-hero Street Brawl analytics (${heroes.length} heroes x ${heroes.length} enemies)`);
+  for (const h of heroes) {
+    const q = `hero_id=${h.id}&game_mode=${BRAWL_GAME_MODE}&min_unix_timestamp=${MIN_TS}`;
+    const item_stats = await getJson(`${API}/v1/analytics/item-stats?${q}`);
+    const perm = await getJson(`${API}/v1/analytics/item-permutation-stats?${q}&comb_size=2`);
+    const permutation_stats = [...perm].sort((a, b) => b.matches - a.matches).slice(0, 600);
+    const vs = {};
+    for (const e of heroes) {
+      if (e.id === h.id) continue;
+      try { vs[e.id] = (await getJson(`${API}/v1/analytics/item-stats?${q}&enemy_hero_ids=${e.id}`)).map(slimStat); }
+      catch (err) { console.warn(`  vs ${e.name} failed: ${err.message}`); }
+    }
+    const maxM = Math.max(0, ...item_stats.map((s) => s.matches));
+    console.log(`   ${h.name}: max item matches ${maxM}, ${item_stats.length} items, ${Object.keys(vs).length} enemies`);
+    await save(`analytics/brawl/${h.id}.json`, { hero_id: h.id, game_mode: BRAWL_GAME_MODE, item_stats, permutation_stats, vs });
+  }
+}
+
+// Metadata for old matches often 503s; tries are kept low so one dead match does not stall the run.
+async function fetchBrawlUser(heroes, manifest) {
+  console.log('brawl 3/3 user Street Brawl matches (validation only)');
+  const hist = await getJson(`${API}/v1/players/${USER}/match-history`);
+  const brawl = hist.filter((m) => m.game_mode === BRAWL_GAME_MODE_ID).sort((a, b) => b.start_time - a.start_time);
+  // the metadata endpoint is throttled to roughly one call a minute; keep what earlier runs fetched and add the rest
+  const file = `validation/brawl-${USER}.json`;
+  let matches = [];
+  try { matches = JSON.parse(await readFile(path.join(OUT, file), 'utf8')).matches || []; } catch { /* first run */ }
+  const have = new Set(matches.map((m) => m.match_id));
+  const todo = brawl.filter((m) => !have.has(m.match_id));
+  console.log(`   ${brawl.length} brawl matches in history, ${matches.length} already saved, ${todo.length} to fetch`);
+  for (const m of todo) {
+    try {
+      const meta = await getJson(`${API}/v1/matches/${m.match_id}/metadata`, 6);
+      const mi = meta.match_info;
+      const p = (mi.players || []).find((x) => x.account_id === USER);
+      if (!p) continue;
+      matches.push({
+        match_id: m.match_id, start_time: mi.start_time, duration_s: mi.duration_s, hero_id: p.hero_id, team: p.team,
+        won: p.team === mi.winning_team, rounds: mi.street_brawl_rounds || [],
+        players: (mi.players || []).map((x) => ({ team: x.team, hero_id: x.hero_id })),
+        items: (p.items || []).map((it) => ({ item_id: it.item_id, game_time_s: it.game_time_s, sold_time_s: it.sold_time_s })),
+      });
+      if (matches.length % 5 === 0) await save(file, { account_id: USER, game_mode: BRAWL_GAME_MODE_ID, matches });
+    } catch (e) { console.warn(`  skip match ${m.match_id}: ${e.message}`); }
+  }
+  matches.sort((a, b) => b.start_time - a.start_time);
+  await save(file, { account_id: USER, game_mode: BRAWL_GAME_MODE_ID, matches });
+  manifest.brawl = { fetched_at: new Date().toISOString(), game_mode: BRAWL_GAME_MODE, heroes: heroes.length, user_matches: matches.length, user_file: file };
+}
+
 async function main() {
+  if (BRAWL_ONLY) {
+    const manifest = JSON.parse(await readFile(path.join(OUT, 'manifest.json'), 'utf8'));
+    const heroes = JSON.parse(await readFile(path.join(OUT, 'heroes.json'), 'utf8'));
+    MIN_TS = manifest.min_unix_timestamp;
+    await fetchBrawl(heroes, manifest);
+    await save('manifest.json', manifest);
+    return;
+  }
   await mkdir(OUT, { recursive: true });
   if (VALIDATION_ONLY) {
     const manifest = JSON.parse(await readFile(path.join(OUT, 'manifest.json'), 'utf8'));
@@ -225,7 +310,11 @@ async function main() {
   const heroesRaw = await getJson(`${ASSETS}/v2/heroes`);
   const active = heroesRaw.filter((h) => h.player_selectable && !h.disabled && !h.in_development);
   const heroes = active.map(slimHero);
-  for (const h of heroes) { const l = await saveImage(h.images.small, 'heroes', h.id); if (l) h.images.small = l; }
+  for (const h of heroes) {
+    const l = await saveImage(h.images.small, 'heroes', h.id); if (l) h.images.small = l;
+    // card art is what the Street Brawl draft screen shows in the top bar; the recogniser matches portraits against it
+    const c = await saveImage(h.images.card, 'heroes', h.id, '-card'); if (c) h.images.card = c;
+  }
   await save('heroes.json', heroes);
   manifest.counts.heroes = heroes.length;
 
@@ -251,6 +340,7 @@ async function main() {
   manifest.counts.user_matches = std.length;
 
   await fetchValidation(manifest);
+  await fetchBrawl(heroes, manifest);
 
   await save('manifest.json', manifest);
   console.log('done', manifest.counts);
