@@ -4,17 +4,16 @@
   <img alt="The Infernus build board: Early / Mid / Late Game item tiles in buy order, the ability point order, and a 73% agreement score against a top player" src="docs/build-board.png">
 </p>
 
-Pick a [Deadlock](https://store.steampowered.com/app/1422450/Deadlock/) hero
-and this spits out a build for it: what to buy, in what order, and which
-abilities to level first. It's all based on what high-rank players actually
-buy, pulled from [deadlock-api.com](https://deadlock-api.com). To keep myself
-honest, every build gets graded against a real top player of that hero (their
-games never feed the generator).
+Generates an item build for any [Deadlock](https://store.steampowered.com/app/1422450/Deadlock/)
+hero: the items, the order to buy them in, and the ability level-up order. The
+builds are based on the item and win rate stats for high-rank players from
+[deadlock-api.com](https://deadlock-api.com). Each build is also compared to
+the recent games of a top player on that hero so you can see how close it gets.
 
-There's also a Street Brawl draft helper. It watches your screen during the
-draft, figures out which three cards you're being offered, and tells you which
-one to take and whether to re-roll. The advice shows up in a little window on
-top of the game, or on your phone.
+It also has a Street Brawl draft advisor. It reads the draft screen while you
+play, identifies the three cards being offered, and ranks them. It also tells
+you whether re-rolling is worth it. The advice shows up in a small window on top
+of the game, or on your phone.
 
 <p align="center">
   <img alt="The Street Brawl advisor reading a live draft: three ranked cards with the enhanced Reactive Barrier marked TAKE" src="docs/brawl-overlay.png">
@@ -22,7 +21,7 @@ top of the game, or on your phone.
 
 ## Quickstart 🚀
 
-Needs Node 18 or newer.
+Requires Node 18+.
 
 ```
 git clone https://github.com/Gidntsquia/deadlock-build-optimizer
@@ -32,59 +31,57 @@ npm run fetch-data   # Downloads everything from the API into public/data/. Take
 npm run dev          # Open http://localhost:5173
 ```
 
-That's it for builds, just click a hero. Once the data is fetched the app
-doesn't touch the network at all.
+Click a hero to see its build. After the data is downloaded the app doesn't
+make any network requests.
 
-For Street Brawl, hit **Brawl** in the top right, then **Capture game screen +
-overlay** and pick the Deadlock window. IMPORTANT: run the game in borderless
-windowed mode, otherwise the overlay can't sit on top of it. If you really want
-exclusive fullscreen, use **Phone display** instead and scan the QR code with
-your phone.
+For Street Brawl, click **Brawl** in the top right, then **Capture game screen +
+overlay** and select the Deadlock window. IMPORTANT: the game has to be in
+borderless windowed mode for the overlay to show on top of it. If you want to
+use exclusive fullscreen, click **Phone display** and scan the QR code with your
+phone instead.
 
-Some other stuff you can do from the terminal:
+Other commands:
 
 ```
 npm run generate 1           # Print Infernus's build (any hero id works)
 npm run brawl -- --hero 1 --round 2 --owned "Extra Charge" --enemies "Lash,Seven" \
     --set "Improved Spirit,Enchanter's Emblem,Swift Striker"   # Draft advice without the screen reader
-npm run verify               # Runs all the checks, prints the held-out scores
+npm run verify               # Runs all the checks and prints the held-out scores
 ```
 
-## What it does 🔬
+## Features 🔬
 
-- One build per hero for all 38 heroes, from the last 30 days of Phantom+
-  games (falls back to all ranks for heroes with thin data).
-- Buy order comes from when people actually buy each item in real games, not
-  from cost.
-- Ability order is whatever sequence wins the most in high-rank games.
-- Each build is scored against a top player's last 30 games. Right now that's
-  64-75% agreement across the four players I check against, and the app shows
-  you exactly which of their core items it missed.
-- Items you'd only get to in a long game (past your usual final net worth) get
-  marked as "stretch".
-- Street Brawl: reads the three cards, the round, the enemy heroes, and what
-  you've already picked straight off the screen. Nothing is sent to the game,
-  it only looks at pixels.
-- Overlay works in Chrome/Edge. Firefox doesn't have always-on-top windows, so
-  use the phone display there.
-- Share a build as an image.
-- No backend. Everything runs in the browser off the fetched data.
+- A build for each of the 38 heroes, using the last 30 days of Phantom+ games.
+  Heroes that don't have enough high-rank data use all ranks.
+- Items are ordered by the average time players buy them at.
+- The ability order is the sequence with the best win rate in high-rank games.
+- Each build is checked against a top player's last 30 games. The four players
+  I check against currently get 64-75% agreement, and the app lists the items
+  from their core set that the build is missing.
+- Items past your usual final net worth are marked as "stretch" items.
+- Street Brawl: the cards, round number, enemy heroes, and the items you've
+  already picked are all read from the screen. Nothing is sent to the game.
+- The overlay works in Chrome and Edge. Firefox can't do always-on-top windows,
+  so use the phone display there.
+- Builds can be shared as an image.
+- No backend, everything runs in the browser.
 
-## More details 📚
+## Documentation 📚
 
-The nitty gritty is in the
+More details in the
 [wiki](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki):
 
-- [Data Pipeline](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Data-Pipeline) — what `fetch-data` grabs, which ranks, rate limits
+- [Data Pipeline](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Data-Pipeline) — what `fetch-data` downloads, rank filtering, rate limits
 - [How the Build Generator Works](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/How-the-Build-Generator-Works) — the scoring formula, buy order, ability order
-- [Held-out Validation](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Held-out-Validation) — who the four top players are and how "agreement" is measured
-- [Street Brawl Advisor](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Street-Brawl-Advisor) — card scoring, the re-roll math, the CLI
-- [Screen Reader](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Screen-Reader) — how cards, round numbers, hero portraits and your picks get recognized
+- [Held-out Validation](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Held-out-Validation) — the four top players and how agreement is measured
+- [Street Brawl Advisor](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Street-Brawl-Advisor) — card scoring, re-roll math, the CLI
+- [Screen Reader](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Screen-Reader) — how cards, round numbers, hero portraits and picks are recognized
 - [Overlay and Phone Display](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Overlay-and-Phone-Display) — screen capture, Picture-in-Picture, ntfy.sh
-- [Judgment Calls](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Judgment-Calls) — every weight I changed and why, with the numbers
+- [Judgment Calls](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Judgment-Calls) — the weight changes and the reasoning behind them
 - [Development](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Development) — code layout, scripts, tests
 
 ## License 📄
 
-[MIT](LICENSE). Game data and images come from [deadlock-api.com](https://deadlock-api.com)
-when you run `fetch-data`, they aren't included in the repo.
+[MIT](LICENSE). Game data and images are downloaded from
+[deadlock-api.com](https://deadlock-api.com) by `fetch-data` and aren't included
+in the repo.
