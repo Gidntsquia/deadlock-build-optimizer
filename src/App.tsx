@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Ability, Build, Hero, HeroAnalytics, Item } from './types';
 import { img, loadAnalytics, loadCore, type Manifest } from './data/load';
 import { generateBuilds } from './generator';
-import { computeCoreSet, loadHeldout, validateBuild, type CoreSet, type HeldoutPurchases } from './validation/heldout';
+import { computeCoreSet, loadHeldout, validateAgainstPanel, type CoreSet, type HeldoutPurchases, type HeldoutSet } from './validation/heldout';
 import { BuildView } from './components/BuildView';
 import { BrawlView } from './components/BrawlView';
 
@@ -13,7 +13,7 @@ export default function App() {
   const [heroes, setHeroes] = useState<Hero[]>([]);
   const [abilities, setAbilities] = useState<Ability[]>([]);
   const [manifest, setManifest] = useState<Manifest | null>(null);
-  const [heldout, setHeldout] = useState<HeldoutPurchases | null>(null);
+  const [heldout, setHeldout] = useState<{ set: HeldoutSet; data: HeldoutPurchases }[]>([]);
   const [heroId, setHeroId] = useState(INFERNUS);
   const [analytics, setAnalytics] = useState<HeroAnalytics | null>(null);
   const [tab, setTab] = useState(0);
@@ -25,17 +25,23 @@ export default function App() {
     loadCore().then(([i, h, a, m]) => { setItems(i); setHeroes(h); setAbilities(a); setManifest(m); }).catch((e) => setError(String(e)));
   }, []);
   useEffect(() => { setAnalytics(null); loadAnalytics(heroId).then(setAnalytics).catch((e) => setError(String(e))); }, [heroId]);
-  // held-out top-player set for this hero, if the snapshot has one
+  // held-out representative players for this hero (up to 5); sets that fail to load are skipped
   useEffect(() => {
-    const set = manifest?.validation_sets?.find((v) => v.hero_id === heroId);
-    setHeldout(null);
-    if (set) loadHeldout(set).then((d) => { if (d.hero_id === heroId) setHeldout(d); }).catch(() => setHeldout(null));
+    const sets = manifest?.validation_sets?.filter((v) => v.hero_id === heroId) ?? [];
+    setHeldout([]);
+    if (!sets.length) return;
+    let live = true;
+    Promise.allSettled(sets.map((set) => loadHeldout(set).then((data) => ({ set, data })))).then((rs) => {
+      if (!live) return;
+      setHeldout(rs.flatMap((r) => (r.status === 'fulfilled' && r.value.data.hero_id === heroId ? [r.value] : [])));
+    });
+    return () => { live = false; };
   }, [heroId, manifest]);
 
   const hero = heroes.find((h) => h.id === heroId);
   const builds: Build[] = useMemo(() => (hero && analytics && items.length ? generateBuilds({ hero, abilities, items, analytics }) : []), [hero, abilities, items, analytics]);
-  const core: CoreSet | null = useMemo(() => (heldout && heldout.hero_id === heroId && items.length ? computeCoreSet(heldout, items) : null), [heldout, items, heroId]);
-  const validations = useMemo(() => (core ? builds.map((b) => validateBuild(b, core)) : []), [builds, core]);
+  const panel: { set: HeldoutSet; core: CoreSet }[] = useMemo(() => (items.length ? heldout.filter((h) => h.data.hero_id === heroId).map((h) => ({ set: h.set, core: computeCoreSet(h.data, items) })) : []), [heldout, items, heroId]);
+  const validations = useMemo(() => (panel.length ? builds.map((b) => validateAgainstPanel(b, panel)) : []), [builds, panel]);
   const build = builds[Math.min(tab, builds.length - 1)];
 
   if (error) return <div className="error">{error}</div>;
@@ -68,7 +74,7 @@ export default function App() {
       {mode === 'build' && !analytics && <div className="loading">Generating builds…</div>}
       {mode === 'build' && builds.length > 0 && (
         <>
-          {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={core} heroName={hero.name} heroImage={img(hero.images.small)} fetchedAt={manifest?.fetched_at.slice(0, 10)} />}
+          {build && <BuildView key={`${heroId}-${build.key}`} build={build} panel={validations[tab] ?? null} heroName={hero.name} heroImage={img(hero.images.small)} fetchedAt={manifest?.fetched_at.slice(0, 10)} />}
         </>
       )}
       <footer>Data: deadlock-api.com (aggregate analytics, assets). Builds are generated deterministically from the local snapshot; see README for the scoring function.</footer>

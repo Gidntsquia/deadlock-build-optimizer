@@ -1,11 +1,11 @@
-// Held-out validation against a top player's real matches on one hero (sets listed in manifest.json,
-// e.g. Zergggy/Infernus, Deathy/Lash, Zergggy/Mina). This module is the ONLY code that reads
-// public/data/validation/*. It runs after builds are generated and never feeds back into the generator.
+// Held-out validation against real matches of up to 5 representative top players per hero (sets listed
+// in manifest.json). This module is the ONLY code that reads public/data/validation/*. It runs after
+// builds are generated and never feeds back into the generator.
 import type { Build, Item } from '../types';
-import { j } from '../data/load';
+import { j, type ValidationSetRef } from '../data/load';
 
-export interface HeldoutSet { account_id: number; player: string; hero_id: number; hero: string; file: string; matches: number }
-export interface HeldoutPurchases { account_id: number; player: string; hero_id: number; hero: string; matches: { match_id: number; won: boolean; duration_s: number; items: { item_id: number; game_time_s: number; sold_time_s: number }[] }[] }
+export type HeldoutSet = ValidationSetRef;
+export interface HeldoutPurchases { account_id: number; player: string; hero_id: number; hero: string; total_hero_matches?: number; matchmaking_hero_matches?: number; matches: { match_id: number; won: boolean; duration_s: number; items: { item_id: number; game_time_s: number; sold_time_s: number }[] }[] }
 
 /** Loads one held-out snapshot. Only this module reads public/data/validation/. */
 export const loadHeldout = (set: HeldoutSet) => j<HeldoutPurchases>(set.file);
@@ -74,4 +74,42 @@ export function validateBuild(build: Build, core: CoreSet): BuildValidation {
   const agreement = OVERLAP_WEIGHT * overlap + ORDER_WEIGHT * order;
   const inBuild = new Set(build.items.map((b) => b.item.id));
   return { buildKey: build.key, agreement, overlap, order, precision, recall, sharedCount: shared.length, badges, missingCore: core.core.filter((c) => !inBuild.has(c.item.id)) };
+}
+
+// ---- panel of representative players ------------------------------------------------------------
+
+export interface PlayerValidation { set: HeldoutSet; core: CoreSet; validation: BuildValidation }
+export interface PanelValidation {
+  players: PlayerValidation[];
+  agreement: number;                       // selection-score-weighted mean of per-player agreement
+  consensusBadges: Record<number, number>; // item id -> number of reps whose core set contains it
+  missingConsensus: { item: Item; reps: number; frequency: number }[]; // core for a majority of reps, absent from the build
+}
+
+/** Number of reps an item must be core for to count as panel consensus (majority, ceil(reps/2)). */
+export const consensusThreshold = (reps: number) => Math.ceil(reps / 2);
+
+export function validateAgainstPanel(build: Build, panel: { set: HeldoutSet; core: CoreSet }[]): PanelValidation {
+  const players: PlayerValidation[] = panel.map((p) => ({ set: p.set, core: p.core, validation: validateBuild(build, p.core) }));
+  const weights = players.map((p) => (p.set.selection?.score ?? 0) > 0 ? p.set.selection!.score : NaN);
+  const allWeighted = weights.length > 0 && weights.every((w) => Number.isFinite(w));
+  const w = allWeighted ? weights : players.map(() => 1);
+  const totalW = w.reduce((a, b) => a + b, 0);
+  const agreement = totalW ? players.reduce((a, p, i) => a + p.validation.agreement * w[i], 0) / totalW : 0;
+
+  const consensusBadges: Record<number, number> = {};
+  const freq = new Map<number, { item: Item; reps: number; sum: number }>();
+  for (const p of players) for (const c of p.core.core) {
+    consensusBadges[c.item.id] = (consensusBadges[c.item.id] ?? 0) + 1;
+    const f = freq.get(c.item.id) ?? { item: c.item, reps: 0, sum: 0 };
+    f.reps++; f.sum += c.frequency; freq.set(c.item.id, f);
+  }
+  for (const b of build.items) consensusBadges[b.item.id] ??= 0;
+  const inBuild = new Set(build.items.map((b) => b.item.id));
+  const need = consensusThreshold(players.length);
+  const missingConsensus = [...freq.values()]
+    .filter((f) => f.reps >= need && !inBuild.has(f.item.id))
+    .map((f) => ({ item: f.item, reps: f.reps, frequency: f.sum / f.reps }))
+    .sort((x, y) => y.reps - x.reps || y.frequency - x.frequency || x.item.id - y.item.id);
+  return { players, agreement, consensusBadges, missingConsensus };
 }

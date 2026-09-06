@@ -95,6 +95,10 @@ h1, h2, h3 { margin: 0; font-weight: 800; }
 .meter > div { height: 100%; background: linear-gradient(90deg, var(--teal), var(--vitality)); }
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
 .kv span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; }
+.panel-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.panel-table th { text-align: left; font-weight: 600; opacity: .7; padding: 2px 6px 2px 0; }
+.panel-table td { padding: 2px 6px 2px 0; border-top: 1px solid rgba(128,128,128,.2); white-space: nowrap; }
+.panel-table th:not(:first-child), .panel-table td:not(:first-child) { text-align: right; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .chip { font-size: 12px; background: rgba(255,255,255,.1); border-radius: 999px; padding: 4px 10px; font-weight: 700; }
 .badge { font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 999px; }

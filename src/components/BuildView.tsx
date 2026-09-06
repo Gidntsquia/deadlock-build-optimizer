@@ -1,7 +1,7 @@
 import { img } from '../data/load';
 import { useState } from 'react';
 import type { Build, BuildItem, Phase } from '../types';
-import type { BuildValidation, CoreSet } from '../validation/heldout';
+import { consensusThreshold, type PanelValidation } from '../validation/heldout';
 import { fmtSouls } from '../text';
 import { ItemCard } from './ItemCard';
 import { ItemTile } from './ItemTile';
@@ -11,7 +11,7 @@ const PHASES: { key: Phase; label: string }[] = [{ key: 'early', label: 'Early G
 // Ability points spent per step, as the in-game board labels them: unlock is free, tiers cost 1 / 2 / 5.
 const AP_COST = { unlock: '', tier1: '1', tier2: '2', tier3: '5' } as const;
 
-export function BuildView({ build, validation, core, heroName, heroImage, fetchedAt }: { build: Build; validation: BuildValidation | null; core: CoreSet | null; heroName: string; heroImage?: string; fetchedAt?: string }) {
+export function BuildView({ build, panel, heroName, heroImage, fetchedAt }: { build: Build; panel: PanelValidation | null; heroName: string; heroImage?: string; fetchedAt?: string }) {
   const [open, setOpen] = useState<BuildItem | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const slug = `${heroName}-${build.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -27,7 +27,10 @@ export function BuildView({ build, validation, core, heroName, heroImage, fetche
   };
   const abilities = [...new Map(build.abilityOrder.map((s) => [s.ability.id, s.ability])).values()];
   const steps = build.abilityOrder.length;
-  const hasCore = Boolean(validation);
+  const reps = panel?.players.length ?? 0;
+  const need = consensusThreshold(reps);
+  const hasCore = reps > 0;
+  const isCore = (id: number) => (panel ? (panel.consensusBadges[id] ?? 0) >= need : undefined);
 
   return (
     <>
@@ -49,7 +52,7 @@ export function BuildView({ build, validation, core, heroName, heroImage, fetche
               <div className="phase-head"><span>{p.label}</span><small>{fmtSouls(rows[rows.length - 1].runningTotal)} souls by end</small></div>
               <div className="tiles">
                 {rows.map((b) => (
-                  <ItemTile key={b.item.id} item={b.item} order={b.order} isCore={validation?.badges[b.item.id]} total={b.runningTotal} cost={b.paidCost}
+                  <ItemTile key={b.item.id} item={b.item} order={b.order} isCore={isCore(b.item.id)} total={b.runningTotal} cost={b.paidCost}
                     onClick={() => setOpen(b)} ariaLabel={`${b.item.name}, ${b.paidCost} souls${b.upgradesFrom ? ` (upgrade from ${b.upgradesFrom.name})` : ''}, buy ${b.order}`} />
                 ))}
               </div>
@@ -64,7 +67,7 @@ export function BuildView({ build, validation, core, heroName, heroImage, fetche
         </div>
         {hasCore && (
           <div className="legend">
-            {hasCore && <span><i style={{ background: 'var(--good)' }} /> in {core?.player}'s core set</span>}
+            <span><i style={{ background: 'var(--good)' }} /> core for {reps === 1 ? `${panel!.players[0].set.player}` : `${need} of ${reps} top players`}</span>
             <span>numbers are buy order</span>
           </div>
         )}
@@ -94,28 +97,38 @@ export function BuildView({ build, validation, core, heroName, heroImage, fetche
         </div>
       </div>
 
-      {validation && core && (
+      {panel && reps > 0 && (
         <div className="panel">
-          <h2>Validation vs. {core.player}'s {core.hero}</h2>
-          <div className="muted">How well the generator did against a held-out top player. Core set = items in ≥30% of their {core.matches} sampled matchmaking games (wins weighted 1.5×); rarer items are their experiments and are excluded. Their data never feeds the generator.</div>
-          <div className="big" style={{ marginTop: 6 }}>{(validation.agreement * 100).toFixed(0)}% agreement</div>
-          <div className="meter"><div style={{ width: `${validation.agreement * 100}%` }} /></div>
-          <div className="kv">
-            <span>Item overlap (F1 of build vs core)</span><span>{(validation.overlap * 100).toFixed(0)}%</span>
-            <span>Core items in build</span><span>{validation.sharedCount} / {core.core.length}</span>
-            <span>Build items that are core</span><span>{(validation.precision * 100).toFixed(0)}%</span>
-            <span>Buy-order agreement (shared items)</span><span>{(validation.order * 100).toFixed(0)}%</span>
+          <h2>Validation vs. top players</h2>
+          <div className="muted">How well the generator did against {reps === 1 ? 'one' : reps} held-out top {heroName} {reps === 1 ? 'player' : 'players'}. A player's core set = items in ≥30% of their sampled matchmaking games (wins weighted 1.5×); rarer items are experiments and are excluded. Panel agreement is the mean over players{reps > 1 ? ', weighted by how representative each player is' : ''}. Their data never feeds the generator.</div>
+          <div className="big" style={{ marginTop: 6 }}>{(panel.agreement * 100).toFixed(0)}% agreement</div>
+          <div className="meter"><div style={{ width: `${panel.agreement * 100}%` }} /></div>
+          <div style={{ overflowX: 'auto', marginTop: 8 }}>
+            <table className="panel-table">
+              <thead><tr><th>Player</th><th title="matches in the sample (wins)">Games</th><th title="lifetime matches on this hero">Lifetime</th><th>Agree</th><th title="core items in build / core items">Core</th></tr></thead>
+              <tbody>
+                {panel.players.map((p) => (
+                  <tr key={p.set.account_id}>
+                    <td>{p.set.player}</td>
+                    <td>{p.core.matches} ({p.core.wins}W)</td>
+                    <td>{p.set.selection?.total_hero_matches ?? '—'}</td>
+                    <td>{(p.validation.agreement * 100).toFixed(0)}%</td>
+                    <td>{p.validation.sharedCount}/{p.core.core.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          {validation.missingCore.length > 0 && <>
-            <div className="muted" style={{ marginTop: 8 }}>Core items this build skipped:</div>
-            <div className="chips">{validation.missingCore.map((c) => <span className="chip" key={c.item.id}>{c.item.name} {(c.frequency * 100).toFixed(0)}%</span>)}</div>
+          {panel.missingConsensus.length > 0 && <>
+            <div className="muted" style={{ marginTop: 8 }}>Core items the panel buys that the build is missing:</div>
+            <div className="chips">{panel.missingConsensus.map((c) => <span className="chip" key={c.item.id} title={`in ${(c.frequency * 100).toFixed(0)}% of their games on average`}>{c.item.name} {c.reps}/{reps} reps</span>)}</div>
           </>}
         </div>
       )}
 
       </div>
     </div>
-      {open && <ItemCard bi={open} isCore={validation?.badges[open.item.id]} onClose={() => setOpen(null)} />}
+      {open && <ItemCard bi={open} isCore={isCore(open.item.id)} onClose={() => setOpen(null)} />}
     </>
   );
 }

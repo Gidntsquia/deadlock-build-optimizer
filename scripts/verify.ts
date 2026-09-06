@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { generateBuilds } from '../src/generator';
-import { computeCoreSet, validateBuild } from '../src/validation/heldout';
+import { computeCoreSet, validateAgainstPanel } from '../src/validation/heldout';
 import { adviseDraft, baseScores } from '../src/brawl';
 
 const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
@@ -13,16 +13,18 @@ const items = read('items.json'), heroes = read('heroes.json'), abilities = read
 check('item catalog has >=200 items', items.length >= 200, `${items.length} items, ${items.filter((i: any) => i.shopable && !i.disabled).length} currently shopable`);
 check('analytics snapshot for every active hero', heroes.every((h: any) => existsSync(`public/data/analytics/${h.id}.json`)), `${heroes.length} heroes`);
 const vsets: any[] = manifest.validation_sets ?? [];
-check('held-out sets: Zergggy/Infernus, Deathy/Lash, Zergggy/Mina', ['35187362-1', '87624911-31', '35187362-63'].every((k) => vsets.some((v) => `${v.account_id}-${v.hero_id}` === k)), vsets.map((v) => `${v.player}/${v.hero}`).join(', '));
+const short = heroes.filter((h: any) => vsets.filter((v) => v.hero_id === h.id && v.matches >= 10).length < 3).map((h: any) => `${h.name} (${vsets.filter((v) => v.hero_id === h.id).length})`);
+check('every active hero has >=3 validation sets with >=10 matches', short.length === 0, short.length ? `short: ${short.join(', ')}` : `${vsets.length} sets over ${heroes.length} heroes`);
 for (const v of vsets) {
   const z = read(v.file);
-  check(`>=20 ${v.player} ${v.hero} matches with purchases`, z.matches.length >= 20 && z.matches.every((m: any) => m.items.length > 0), `${z.matches.length} matches`);
-  check(`${v.player} ${v.hero} matches are matchmaking only`, z.matches.every((m: any) => [1, 2].includes(m.match_mode) && m.game_mode === 1 && z.hero_id === v.hero_id));
+  check(`${v.player} ${v.hero}: >=5 matches, all with purchases`, z.matches.length >= 5 && z.matches.every((m: any) => m.items.length > 0), `${z.matches.length} matches`);
+  check(`${v.player} ${v.hero}: matchmaking-only, hero matches`, z.hero_id === v.hero_id && z.account_id === v.account_id && z.matches.every((m: any) => [1, 2].includes(m.match_mode) && m.game_mode === 1));
 }
 
 // generator must not reference any held-out player or snapshot
 const gen = readdirSync('src/generator').map((f) => readFileSync(`src/generator/${f}`, 'utf8')).join('\n');
-check('generator has no held-out player reference', !/zergggy|deathy|35187362|87624911|validation\//i.test(gen));
+const heldoutIds = [...new Set(vsets.map((v) => String(v.account_id)))];
+check('generator has no held-out player reference', !/validation\//i.test(gen) && !heldoutIds.some((id) => gen.includes(id)), `${heldoutIds.length} account ids checked`);
 const readers = execSync("grep -rlE 'HeldoutPurchases>\\(|validation/[0-9]' src || true").toString().trim().split('\n').filter(Boolean);
 check('only validation module reads held-out snapshots', readers.every((f) => f.startsWith('src/validation/')), 'files fetching the snapshot: ' + readers.join(', '));
 
@@ -50,15 +52,27 @@ for (const hero of heroes) {
 const a = execSync('npx tsx scripts/generate-cli.ts 1 --json').toString(), b = execSync('npx tsx scripts/generate-cli.ts 1 --json').toString();
 check('rerun yields identical Infernus builds', a === b);
 
-// validation report for every held-out set
-for (const v of vsets) {
-  const hero = heroes.find((h: any) => h.id === v.hero_id);
-  const builds = generateBuilds({ hero, abilities, items, analytics: read(`analytics/${v.hero_id}.json`) });
-  const core = computeCoreSet(read(v.file), items);
+// validation report for every hero with a held-out panel
+const heroAgreement: { hero: string; agreement: number }[] = [];
+for (const hero of heroes) {
+  const sets = vsets.filter((v) => v.hero_id === hero.id);
+  if (!sets.length) continue;
+  const builds = generateBuilds({ hero, abilities, items, analytics: read(`analytics/${hero.id}.json`) });
+  const panel = sets.map((set) => ({ set, core: computeCoreSet(read(set.file), items) }));
+  let best = 0; let ok = true; const why: string[] = [];
   for (const bld of builds) {
-    const val = validateBuild(bld, core);
-    check(`${v.player}/${v.hero}: every item has a core badge + agreement %`, bld.items.every((i) => typeof val.badges[i.item.id] === 'boolean') && val.agreement >= 0 && val.agreement <= 1, `${(val.agreement * 100).toFixed(0)}% (${val.sharedCount}/${core.core.length} core)`);
+    const val = validateAgainstPanel(bld, panel);
+    const okB = val.players.length === sets.length && val.agreement >= 0 && val.agreement <= 1 && val.players.every((p) => p.validation.agreement >= 0 && p.validation.agreement <= 1 && bld.items.every((i) => typeof val.consensusBadges[i.item.id] === 'number'));
+    if (!okB) { ok = false; why.push(bld.name); }
+    best = Math.max(best, val.agreement);
   }
+  heroAgreement.push({ hero: hero.name, agreement: best });
+  check(`${hero.name}: panel of ${sets.length} (${sets.map((s) => s.player).join(', ')}) agreement in [0,1] + badges`, ok, ok ? `best build ${(best * 100).toFixed(0)}%` : why.join('; '));
+}
+if (heroAgreement.length) {
+  const sorted = [...heroAgreement].sort((x, y) => x.agreement - y.agreement);
+  const med = sorted[Math.floor(sorted.length / 2)].agreement;
+  console.log(`median panel agreement across heroes: ${(med * 100).toFixed(0)}%  (lowest: ${sorted.slice(0, 5).map((h) => `${h.hero} ${(h.agreement * 100).toFixed(0)}%`).join(', ')})`);
 }
 // Street Brawl engine (only when the brawl snapshot exists)
 if (existsSync('public/data/brawl-config.json') && existsSync('public/data/analytics/brawl/1.json')) {

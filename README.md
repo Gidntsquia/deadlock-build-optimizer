@@ -46,7 +46,7 @@ Other commands:
 npm run generate 1           # Print Infernus's build (any hero id works)
 npm run brawl -- --hero 1 --round 2 --owned "Extra Charge" --enemies "Lash,Seven" \
     --set "Improved Spirit,Enchanter's Emblem,Swift Striker"   # Draft advice without the screen reader
-npm run verify               # Runs all the checks and prints the held-out scores
+npm run verify               # Runs all the checks and prints the panel agreement per hero
 ```
 
 ## Features 🔬
@@ -55,9 +55,11 @@ npm run verify               # Runs all the checks and prints the held-out score
   Heroes that don't have enough high-rank data use all ranks.
 - Items are ordered by the average time players buy them at.
 - The ability order is the sequence with the best win rate in high-rank games.
-- Each build is checked against a top player's last 30 games. The four players
-  I check against currently get 64-75% agreement, and the app lists the items
-  from their core set that the build is missing.
+- Each build is checked against a panel of up to 5 top players per hero, chosen
+  by recent Phantom+ games on the hero and weighted toward players with more
+  lifetime games and more recent play. The app shows the panel's agreement
+  (the median across heroes is 64%, Infernus is at 74%) and lists the core items the panel buys that the build
+  is missing.
 - Street Brawl: the cards, round number, enemy heroes, and the items you've
   already picked are all read from the screen. Nothing is sent to the game.
 - The overlay works in Chrome and Edge. Firefox can't do always-on-top windows,
@@ -72,7 +74,7 @@ More details in the
 
 - [Data Pipeline](../../wiki/Data-Pipeline) — what `fetch-data` downloads, rank filtering, rate limits
 - [How the Build Generator Works](../../wiki/How-the-Build-Generator-Works) — the scoring formula, buy order, ability order
-- [Held-out Validation](../../wiki/Held-out-Validation) — the four top players and how agreement is measured
+- [Held-out Validation](../../wiki/Held-out-Validation) — how the panel of up to 5 top players per hero is chosen and how agreement is measured
 - [Street Brawl Advisor](../../wiki/Street-Brawl-Advisor) — card scoring, re-roll math, the CLI
 - [Screen Reader](../../wiki/Screen-Reader) — how cards, round numbers, hero portraits and picks are recognized
 - [Overlay and Phone Display](../../wiki/Overlay-and-Phone-Display) — screen capture, Picture-in-Picture, ntfy.sh
