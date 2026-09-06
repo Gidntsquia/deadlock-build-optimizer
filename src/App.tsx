@@ -68,7 +68,7 @@ export default function App() {
       <select className="hero-select" value={heroId} onChange={(e) => { setHeroId(Number(e.target.value)); setTab(0); }} aria-label="Select hero">
         {heroes.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
       </select>
-      {mode === 'brawl' && <BrawlView hero={hero} heroes={heroes} items={items} abilities={abilities} />}
+      {mode === 'brawl' && <BrawlView hero={hero} heroes={heroes} items={items} abilities={abilities} onHero={setHeroId} />}
       {mode === 'build' && !analytics && <div className="loading">Generating builds…</div>}
       {mode === 'build' && builds.length > 0 && (
         <>

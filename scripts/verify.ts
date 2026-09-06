@@ -97,7 +97,7 @@ if (existsSync('public/data/brawl-config.json') && existsSync('public/data/analy
     let out = '';
     try { out = execSync('npx tsx scripts/brawl-recognise.ts --screens', { stdio: ['ignore', 'pipe', 'pipe'] }).toString(); } catch (e: any) { out = e.stdout?.toString() ?? ''; }
     const m = out.match(/(\d+)\/(\d+) labels/);
-    check('brawl recogniser reads >= 95 % of screen labels (round, choice, eight portraits)', !!m && Number(m[1]) / Number(m[2]) >= 0.95, m ? m[0] : out.slice(-200));
+    check('brawl recogniser reads >= 95 % of screen labels (round, choice, own hero, eight portraits)', !!m && Number(m[1]) / Number(m[2]) >= 0.95, m ? m[0] : out.slice(-200));
   }
   const userFile = manifest.brawl?.user_file ?? 'validation/brawl-267836488.json';
   if (existsSync(`public/data/${userFile}`)) {

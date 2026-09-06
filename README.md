@@ -210,9 +210,13 @@ The same capture also reads the labels: "ROUND n" above the timer and "CHOICE n 
 thresholded on their text colour, cropped to the digit's bounding box, resampled onto an 8×12 grid and matched
 against digit templates taken from the screenshots (round 5 is hand-drawn: no screenshot of it yet; an unreadable
 digit leaves the tab's own counter alone). The eight portraits in the top bar are matched, with a circular mask,
-against each hero's card art cropped to the head (`brawl-icons.json` carries those too); the side holding the
-selected hero is the player's team and the other four are the enemies. A hovered portrait (teal highlight)
-reads as unknown, so the enemy list fills in over a few frames. 87/90 labels on the 9 screen fixtures.
+against each hero's card art cropped to the head (`brawl-icons.json` carries those too). The player's own
+portrait is the one drawn as a square-topped tile rather than a circle (`readSelfSlot`: two full-height vertical
+edges about a portrait apart, with the tile fill differing from the bar background beside it); the capture
+switches the app to that hero, so the advisor works for whichever hero is being played without picking it by hand.
+While the "round starting" banner is up every slot is a tile, so such frames are skipped. The side holding the
+player's hero is the player's team and the other four are the enemies. A hovered portrait (teal highlight)
+reads as unknown, so the enemy list fills in over a few frames. 96/99 labels on the 9 screen fixtures.
 
 ```
 npm run brawl:see -- --fixtures            # 27 labelled card crops from 9 screenshots: item, tier, rare, enhanced
