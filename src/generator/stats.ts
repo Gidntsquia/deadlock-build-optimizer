@@ -25,17 +25,24 @@ export const ARCHETYPES: Archetype[] = [
   },
 ];
 
-// Scoring weights (see README "Scoring function").
-export const WEIGHTS = { popularity: 1.0, winLift: 1.0, efficiency: 0.2, kit: 0.2, synergy: 0.5, active: 0.1 };
-export const WIN_SHRINK_FRAC = 0.05;      // Bayesian shrinkage: prior weight = 5% of the hero's most-bought item's matches
-export const MIN_USAGE = 0.03;            // ignore items bought in <3% (relative) of games: their win rates are selection-biased noise
-export const MAX_ITEMS = 14;
-export const MIN_ITEMS = 12;
-export const MAX_UPGRADE_STEPS = 4;      // extra entries allowed for component -> upgrade pairs (they share a slot)
-export const SLOT_CAP = 5;                // items per slot type (4 base slots + 1 flex, rounded)
-export const MAX_ACTIVES = 3;
-export const PHASE_TIME_S = { early: 600, mid: 1320 }; // <10 min early, <22 min mid, else late
-export const TIER_MIN = { 1: 3, 2: 3 } as Record<number, number>; // minimum items of tier 1 / tier 2
+// Scoring weights and selection limits (see the wiki "How the Build Generator Works"). One mutable
+// object so scripts/tune.ts can sweep them; the app never changes it at runtime. Current values were
+// chosen by scripts/tune.ts to maximise mean panel agreement over all 38 heroes (2026-09-06), so they
+// are in-sample for that panel.
+export const PARAMS = {
+  weights: { popularity: 2.0, winLift: 0.25, efficiency: 0, kit: 0, synergy: 0.25, active: 0.3 },
+  winShrinkFrac: 0.2,       // Bayesian shrinkage: prior weight = 20% of the hero's most-bought item's matches
+  minUsage: 0.12,           // ignore items bought in <12% (relative) of games: their win rates are selection-biased noise
+  maxItems: 16,             // the game has 16 slots
+  minItems: 14,
+  maxUpgradeSteps: 6,       // extra entries allowed for component -> upgrade pairs (they share a slot)
+  slotCap: 8,               // items per slot type (4 base slots + 4 flex)
+  maxActives: 3,
+  phaseTimeS: { early: 600, mid: 1320 }, // <10 min early, <22 min mid, else late
+  tierMin: { 1: 4, 2: 3 } as Record<number, number>, // minimum items of tier 1 / tier 2
+  pairMinMatches: 200,      // item pairs with fewer matches carry no synergy signal
+};
+export const WEIGHTS = PARAMS.weights;
 // Population choice: generate from the high-rank population (lobby average badge >= the snapshot's
 // top_min_average_badge, currently 90 = Phantom+) when it has enough data, else fall back to all ranks.
 export const MIN_TOP_ITEM_MATCHES = 500;    // the hero's most-bought item needs >=500 high-rank matches

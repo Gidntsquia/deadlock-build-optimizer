@@ -1,7 +1,7 @@
 # Deadlock Optimal Build Finder 🔧
 
 <p align="center">
-  <img alt="The Infernus build board: Early / Mid / Late Game item tiles in buy order, the ability point order, and a 73% agreement score against a top player" src="docs/build-board.png">
+  <img alt="The Infernus build board: Early / Mid / Late Game item tiles in buy order, the ability point order, and the agreement score against a panel of top players" src="docs/build-board.png">
 </p>
 
 Generates an item build for any [Deadlock](https://store.steampowered.com/app/1422450/Deadlock/)
@@ -54,11 +54,13 @@ npm run verify               # Runs all the checks and prints the panel agreemen
 - A build for each of the 38 heroes, using the last 30 days of Phantom+ games.
   Heroes that don't have enough high-rank data use all ranks.
 - Items are ordered by the average time players buy them at.
+- The scoring weights were tuned against the panel below (`npx tsx scripts/tune.ts`),
+  so the agreement numbers are a fit to that panel, not an out-of-sample forecast.
 - The ability order is the sequence with the best win rate in high-rank games.
 - Each build is checked against a panel of up to 5 top players per hero, chosen
   by recent Phantom+ games on the hero and weighted toward players with more
   lifetime games and more recent play. The app shows the panel's agreement
-  (the median across heroes is 64%, Infernus is at 74%) and lists the core items the panel buys that the build
+  (the median across heroes is 70%, Infernus is at 75%) and lists the core items the panel buys that the build
   is missing.
 - Street Brawl: the cards, round number, enemy heroes, and the items you've
   already picked are all read from the screen. Nothing is sent to the game.

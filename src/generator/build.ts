@@ -2,7 +2,7 @@
 // analytics snapshot for the hero (item-stats, ability-order-stats, item-permutation-stats).
 // It never reads any per-player data.
 import type { Ability, AnalyticsPopulation, Build, BuildItem, BuildPopulation, Hero, HeroAnalytics, Item, ItemStat, Phase, SlotType } from '../types';
-import { ARCHETYPES, MAX_ACTIVES, MAX_ITEMS, MAX_UPGRADE_STEPS, MIN_ITEMS, MIN_TOP_ITEM_MATCHES, MIN_TOP_SEQ_MATCHES, PHASE_TIME_S, SLOT_CAP, TIER_MIN, UNIT_VALUE, WEIGHTS, WIN_SHRINK_FRAC, MIN_USAGE, type Archetype } from './stats';
+import { ARCHETYPES, MIN_TOP_ITEM_MATCHES, MIN_TOP_SEQ_MATCHES, PARAMS, UNIT_VALUE, type Archetype } from './stats';
 import { kitProfile } from './kit';
 import { pickAbilityOrder } from './abilities';
 
@@ -53,6 +53,7 @@ export function generateBuilds(input: GeneratorInput): Build[] {
 
 export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
   const { hero, abilities, items } = input;
+  const { weights: WEIGHTS, winShrinkFrac: WIN_SHRINK_FRAC, minUsage: MIN_USAGE, maxItems: MAX_ITEMS, minItems: MIN_ITEMS, maxUpgradeSteps: MAX_UPGRADE_STEPS, slotCap: SLOT_CAP, maxActives: MAX_ACTIVES, phaseTimeS: PHASE_TIME_S, tierMin: TIER_MIN, pairMinMatches } = PARAMS;
   const pop = choosePopulation(input.analytics);
   const analytics = pop.items;
   const catalog = new Map(items.filter((i) => i.shopable && !i.disabled && i.cost > 0).map((i) => [i.id, i]));
@@ -98,7 +99,7 @@ export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
   // 2) pair synergy lookup
   const pair = new Map<string, number>();
   for (const p of analytics.permutation_stats) {
-    if (p.item_ids.length !== 2 || p.matches < 20) continue;
+    if (p.item_ids.length !== 2 || p.matches < pairMinMatches) continue;
     const lift = (p.wins / p.matches - meanWR) * 10;
     const [a, b] = p.item_ids;
     pair.set(`${a}:${b}`, lift); pair.set(`${b}:${a}`, lift);
