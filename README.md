@@ -153,7 +153,7 @@ score(card) = 1.0 · sqrt(pop)      pop     = matches / matches of the most-pick
             + 1.0 · winLift        (shrunkWR − heroMeanWR) × 10 × pop, K = max(200, 5 % of the tier's top item)
             + 0.3 · kit            soul-equivalent stat value under the hero's kit multipliers, relative to
                                    the tier median, clipped at 2× (unpriced items = tier median, i.e. neutral)
-            + 0.2 · (tier − 1)     a rare (tier-bumped) card beats a normal card of the same rank
+            + 1.0 · (tier − 1)     a rare (tier-bumped) card is a whole tier above the rest of its set
             + 0.5 · counter        mean over known enemies of (lift vs that enemy − lift vs the field) × 10 × pop
             + 0.5 · synergy        mean pair win-lift (×10) with items already held (pairs with ≥ 20 matches)
             + 0.1 · [active]       − 0.5 if 4 actives are already held (Brawl keeps the 4-active cap)
@@ -162,7 +162,12 @@ score(card) = 1.0 · sqrt(pop)      pop     = matches / matches of the most-pick
 ```
 
 * Popularity and win-lift are normalised **within tier** because a tier-4 item is picked less often than a
-  tier-1 item mostly because it is offered less often. Cross-tier usage says little about quality.
+  tier-1 item mostly because it is offered less often. Cross-tier usage says little about quality. That means
+  the within-tier terms only rank a card among its own tier (spread about 0.2 worst .. 1.4 best, for every
+  tier and hero), so the tier bonus is what compares a rare card with the normal cards next to it. One tier is
+  worth the whole within-tier spread: a median tier-3 card beats the best tier-2 card, and only a tier-3 card
+  that is useless for the hero loses to a top tier-2 pick (everything in the draft is free, so a 3200-soul
+  item is nearly always the better take than a 1600-soul one).
 * With several sets given at once (CLI, offline) the pick is the best of the one-per-set combinations,
   adding pair synergy between the picks themselves; two copies of the same item in one round are penalised.
   The app passes the single visible set.
@@ -223,11 +228,15 @@ themselves stay out of git, only the card crops under `scripts/fixtures/brawl-ca
 
 The header switch (or `#brawl`) opens the advisor: pick hero, then either **Capture game screen + overlay** or
 type the three cards. The capture (`getDisplayMedia`) hands frames to a Web Worker that runs the recogniser, so
-the page never blocks; a frame is skipped while the previous one is still being read (about 200-300 ms for the
-three cards at 2560×1440, the labels and hero bar are read only when a new set of cards is accepted). A read
-is accepted once two consecutive frames agree. The same click opens the **always-on-top overlay** (Document
-Picture-in-Picture, Chrome/Edge) with the advice, so the game can stay in front: run Deadlock in borderless
-windowed mode, exclusive fullscreen hides the overlay.
+the page never blocks. The worker paces the loop: it asks the page for a frame, reads it (about 200-300 ms for
+the three cards at 2560×1440, the labels and hero bar are read only when a new set of cards is accepted), waits
+250 ms and asks again. The pacing lives in the worker because page timers are throttled to once a second (Chrome:
+once a minute after five minutes) while the game has the foreground and the tab is hidden, which used to freeze
+the advice until an alt-tab; worker timers are not throttled. A read is accepted once two consecutive frames
+agree. In Chrome/Edge the same click opens the **always-on-top overlay** (Document Picture-in-Picture) with the
+advice, so the game can stay in front: run Deadlock in borderless windowed mode, exclusive fullscreen hides the
+overlay. Firefox has no always-on-top web window: the capture and everything else work the same, the **Advice
+window** button opens the advice in a plain popup for a second monitor, and the phone display covers the rest.
 
 Picks are read from the screen too: the draft screen's bottom-left inventory grid (two rows of five icons) is
 matched against the icon index, and a new entry that was on offer is the card just taken. The grid is the
@@ -243,8 +252,11 @@ whenever the advice changes, with its screen kept awake. Nothing to install, no 
 data: the app publishes the advice (hero, cards, scores, no account data) to a random topic on the public
 [ntfy.sh](https://ntfy.sh) service and `public/phone.html` subscribes to it over Server-Sent Events. The topic
 is `brawl-<code>`; the code is kept in localStorage while the display is on and dropped when it is turned off.
-A self-hosted ntfy server can be used by setting localStorage `brawl-ntfy` to its URL (the browser check does
-this with `scripts/mock-ntfy.mjs`). The capture itself keeps working in exclusive fullscreen; only the overlay is
+ntfy.sh's free tier allows 250 messages per IP per day, so the app only publishes states worth showing (the empty
+moment between a pick and the next set is skipped while capturing; about one message per card set, 15-20 per
+game) and reports a 429 in plain words. Another ntfy server (self-hosted, or a paid ntfy.sh account's) can be
+typed into the field under the QR code; it is kept in localStorage `brawl-ntfy` (the browser check points it at
+`scripts/mock-ntfy.mjs`). The capture itself keeps working in exclusive fullscreen; only the overlay is
 hidden.
 
 Recogniser speed: icon matching is coarse-to-fine, the nominal window is scored against all 173 icons and the
