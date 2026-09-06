@@ -47,7 +47,7 @@ export default function App() {
         <img src={img(hero.images.small)} alt="" />
         <div>
           <h1>{hero.name} {mode === 'brawl' ? 'Street Brawl' : 'build'}</h1>
-          <div className="sub">Deadlock Build Optimizer, {manifest?.window_days}-day data fetched {manifest?.fetched_at.slice(0, 10)}</div>
+          <div className="sub">Deadlock Optimal Build Finder, {manifest?.window_days}-day data fetched {manifest?.fetched_at.slice(0, 10)}</div>
         </div>
         <div className="mode-switch" role="tablist" aria-label="Mode">
           <button role="tab" aria-selected={mode === 'build'} className={mode === 'build' ? 'active' : ''} onClick={() => setMode('build')}>Build</button>

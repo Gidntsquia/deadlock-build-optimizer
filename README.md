@@ -1,4 +1,4 @@
-# Deadlock Build Optimizer 🔧
+# Deadlock Optimal Build Finder 🔧
 
 <p align="center">
   <img alt="The Infernus build board: Early / Mid / Late Game item tiles in buy order, the ability point order, and a 73% agreement score against a top player" src="docs/build-board.png">
@@ -25,7 +25,7 @@ Requires Node 18+.
 
 ```
 git clone <this repository's URL>
-cd deadlock-build-optimizer
+cd deadlock-optimal-build-finder
 npm install
 npm run fetch-data   # Downloads everything from the API into public/data/. Takes ~3 min, ~16 MB.
 npm run dev          # Open http://localhost:5173

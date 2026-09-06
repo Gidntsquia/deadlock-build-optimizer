@@ -1,5 +1,5 @@
 {
-  "name": "deadlock-build-optimizer",
+  "name": "deadlock-optimal-build-finder",
   "private": true,
   "version": "0.0.0",
   "type": "module",

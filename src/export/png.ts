@@ -51,7 +51,7 @@ export async function renderBuildPng(build: Build, o: PngOptions): Promise<Blob>
   g.fillStyle = C.teal; g.fillRect(0, 0, W, 58);
   if (heroImg) { g.save(); g.beginPath(); g.arc(36, 29, 20, 0, Math.PI * 2); g.clip(); g.drawImage(heroImg, 16, 9, 40, 40); g.restore(); }
   g.fillStyle = C.tealInk; g.font = `800 20px ${FONT}`; g.textBaseline = 'middle'; g.fillText(`${o.heroName} build`, 68, 22);
-  g.font = `700 12px ${FONT}`; g.globalAlpha = .8; g.fillText(`Deadlock Build Optimizer${o.fetchedAt ? `, data fetched ${o.fetchedAt}` : ''}`, 68, 42); g.globalAlpha = 1;
+  g.font = `700 12px ${FONT}`; g.globalAlpha = .8; g.fillText(`Deadlock Optimal Build Finder${o.fetchedAt ? `, data fetched ${o.fetchedAt}` : ''}`, 68, 42); g.globalAlpha = 1;
 
   // board
   let y = 70;
