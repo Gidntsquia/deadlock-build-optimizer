@@ -36,7 +36,7 @@
         '<small>score ' + Number(c.score).toFixed(2) + (c.usage != null ? ' · used by ' + Math.round(c.usage * 100) + '%' : '') + (c.winRate != null ? ', wins ' + Math.round(c.winRate * 100) + '%' : '') + '</small>' +
         (c.why && c.why.length ? '<small>' + esc(c.why.join('; ')) + '</small>' : '') + '</span></div>';
     }
-    if (s.reroll) h += '<div class="reroll">Re-roll this set: best card ' + s.reroll.currentBest.toFixed(2) + ', a fresh tier-' + s.reroll.tier + ' set should offer ' + s.reroll.expectedBest.toFixed(2) + '</div>';
+    if (s.reroll) h += '<div class="reroll">Re-roll this set: best card ' + s.reroll.currentBest.toFixed(2) + ', a fresh tier-' + s.reroll.tier + ' set should offer ' + s.reroll.expectedBest.toFixed(2) + (s.reroll.holdValue > 0 ? ' (saving it for a later set is worth ' + s.reroll.holdValue.toFixed(2) + ')' : '') + '</div>';
     else if (s.cards && s.cards.length) h += '<div class="muted">Keep this set.</div>';
     root.innerHTML = h;
   };
