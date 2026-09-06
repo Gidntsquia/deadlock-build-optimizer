@@ -11,8 +11,6 @@
 //   public/data/img/{items,heroes,abilities}/  webp images so the app needs no network at all
 //   public/data/brawl-config.json          Street Brawl mode constants (round budgets, draft tiers/weights)
 //   public/data/analytics/brawl/<hero_id>.json  Street Brawl item-stats, pair stats, and item-stats vs every enemy hero
-//   public/data/validation/brawl-<account>.json your Street Brawl matches with per-round picks (VALIDATION ONLY;
-//                                          only when DEADLOCK_ACCOUNT_ID is set)
 //   public/data/manifest.json              timestamps + counts
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -20,9 +18,6 @@ import path from 'node:path';
 const API = 'https://api.deadlock-api.com';
 const ASSETS = 'https://assets.deadlock-api.com';
 const OUT = path.resolve('public/data');
-// Optional: your own account id (the number in your deadlock-api / Steam3 profile). Only used to fetch your
-// Street Brawl matches as a held-out validation set. Leave unset to skip that step.
-const USER = Number(process.env.DEADLOCK_ACCOUNT_ID) || null;
 // Held-out validation sets: (top player, hero). Never read by the generator.
 const VALIDATION_SETS = [
   { account_id: 35187362, player: 'Zergggy', hero_id: 1, hero: 'Infernus' },
@@ -41,15 +36,12 @@ const WINDOW_DAYS = 30;
 const TOP_BADGE = 90;
 // `--analytics-only` refreshes only public/data/analytics/* from the existing heroes.json.
 const ANALYTICS_ONLY = process.argv.includes('--analytics-only');
-// `--brawl` refreshes only the Street Brawl snapshot (brawl-config.json, analytics/brawl/*, validation/brawl-*).
-const BRAWL_ONLY = process.argv.includes('--brawl') || process.argv.includes('--brawl-user-only');
-// `--brawl-user-only` skips brawl-config / per-hero analytics and refreshes only the user's brawl matches.
-const BRAWL_USER_ONLY = process.argv.includes('--brawl-user-only');
+// `--brawl` refreshes only the Street Brawl snapshot (brawl-config.json, analytics/brawl/*).
+const BRAWL_ONLY = process.argv.includes('--brawl');
 const MAX_WAIT_MS = 30 * 60 * 1000;
 // Street Brawl analytics: the API has no rank filter for this mode (400 "Cannot filter by average badge"),
 // so there is one all-rank population. Enemy-filtered item-stats are fetched for every hero as the counter term.
 const BRAWL_GAME_MODE = 'street_brawl';
-const BRAWL_GAME_MODE_ID = 4; // game_mode value in match-history / match metadata
 let MIN_TS = Math.floor(Date.now() / 1000) - WINDOW_DAYS * 86400;
 // Rate limit is 200 req / 60 s -> ~350 ms between requests keeps us well under.
 const SLEEP_MS = 350;
@@ -211,15 +203,10 @@ async function fetchValidation(manifest) {
 const slimStat = (s) => ({ item_id: s.item_id, wins: s.wins, matches: s.matches });
 
 async function fetchBrawl(heroes, manifest) {
-  if (!BRAWL_USER_ONLY) await fetchBrawlAnalytics(heroes);
-  await fetchBrawlUser(heroes, manifest);
-}
-
-async function fetchBrawlAnalytics(heroes) {
-  console.log(`brawl 1/3 mode config`);
+  console.log(`brawl 1/2 mode config`);
   const generic = await getJson(`${ASSETS}/v2/generic-data`);
   await save('brawl-config.json', { fetched_at: new Date().toISOString(), ...generic.street_brawl });
-  console.log(`brawl 2/3 per-hero Street Brawl analytics (${heroes.length} heroes x ${heroes.length} enemies)`);
+  console.log(`brawl 2/2 per-hero Street Brawl analytics (${heroes.length} heroes x ${heroes.length} enemies)`);
   for (const h of heroes) {
     const q = `hero_id=${h.id}&game_mode=${BRAWL_GAME_MODE}&min_unix_timestamp=${MIN_TS}`;
     const item_stats = await getJson(`${API}/v1/analytics/item-stats?${q}`);
@@ -235,39 +222,7 @@ async function fetchBrawlAnalytics(heroes) {
     console.log(`   ${h.name}: max item matches ${maxM}, ${item_stats.length} items, ${Object.keys(vs).length} enemies`);
     await save(`analytics/brawl/${h.id}.json`, { hero_id: h.id, game_mode: BRAWL_GAME_MODE, item_stats, permutation_stats, vs });
   }
-}
-
-// Metadata for old matches often 503s; tries are kept low so one dead match does not stall the run.
-async function fetchBrawlUser(heroes, manifest) {
-  if (!USER) { console.log('brawl 3/3 skipped: set DEADLOCK_ACCOUNT_ID to fetch your Street Brawl matches for validation'); return; }
-  console.log('brawl 3/3 your Street Brawl matches (validation only)');
-  const hist = await getJson(`${API}/v1/players/${USER}/match-history`);
-  const brawl = hist.filter((m) => m.game_mode === BRAWL_GAME_MODE_ID).sort((a, b) => b.start_time - a.start_time);
-  // the metadata endpoint is throttled to roughly one call a minute; keep what earlier runs fetched and add the rest
-  const file = `validation/brawl-${USER}.json`;
-  let matches = [];
-  try { matches = JSON.parse(await readFile(path.join(OUT, file), 'utf8')).matches || []; } catch { /* first run */ }
-  const have = new Set(matches.map((m) => m.match_id));
-  const todo = brawl.filter((m) => !have.has(m.match_id));
-  console.log(`   ${brawl.length} brawl matches in history, ${matches.length} already saved, ${todo.length} to fetch`);
-  for (const m of todo) {
-    try {
-      const meta = await getJson(`${API}/v1/matches/${m.match_id}/metadata`, 6);
-      const mi = meta.match_info;
-      const p = (mi.players || []).find((x) => x.account_id === USER);
-      if (!p) continue;
-      matches.push({
-        match_id: m.match_id, start_time: mi.start_time, duration_s: mi.duration_s, hero_id: p.hero_id, team: p.team,
-        won: p.team === mi.winning_team, rounds: mi.street_brawl_rounds || [],
-        players: (mi.players || []).map((x) => ({ team: x.team, hero_id: x.hero_id })),
-        items: (p.items || []).map((it) => ({ item_id: it.item_id, game_time_s: it.game_time_s, sold_time_s: it.sold_time_s })),
-      });
-      if (matches.length % 5 === 0) await save(file, { account_id: USER, game_mode: BRAWL_GAME_MODE_ID, matches });
-    } catch (e) { console.warn(`  skip match ${m.match_id}: ${e.message}`); }
-  }
-  matches.sort((a, b) => b.start_time - a.start_time);
-  await save(file, { account_id: USER, game_mode: BRAWL_GAME_MODE_ID, matches });
-  manifest.brawl = { fetched_at: new Date().toISOString(), game_mode: BRAWL_GAME_MODE, heroes: heroes.length, user_matches: matches.length, user_file: file };
+  manifest.brawl = { fetched_at: new Date().toISOString(), game_mode: BRAWL_GAME_MODE, heroes: heroes.length };
 }
 
 async function main() {

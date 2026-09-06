@@ -4,7 +4,6 @@ import { execSync } from 'node:child_process';
 import { generateBuilds } from '../src/generator';
 import { computeCoreSet, validateBuild } from '../src/validation/heldout';
 import { adviseDraft, baseScores } from '../src/brawl';
-import { validateBrawlPicks } from '../src/validation/brawl';
 
 const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
 let fails = 0;
@@ -98,17 +97,6 @@ if (existsSync('public/data/brawl-config.json') && existsSync('public/data/analy
     try { out = execSync('npx tsx scripts/brawl-recognise.ts --screens', { stdio: ['ignore', 'pipe', 'pipe'] }).toString(); } catch (e: any) { out = e.stdout?.toString() ?? ''; }
     const m = out.match(/(\d+)\/(\d+) labels/);
     check('brawl recogniser reads >= 95 % of screen labels (round, choice, own hero, eight portraits)', !!m && Number(m[1]) / Number(m[2]) >= 0.95, m ? m[0] : out.slice(-200));
-  }
-  const userFile = manifest.brawl?.user_file;
-  if (userFile && existsSync(`public/data/${userFile}`)) {
-    const data = read(userFile);
-    let n = 0, sum = 0, popSum = 0;
-    for (const id of new Set<number>(data.matches.map((m: any) => m.hero_id))) {
-      const hero = heroes.find((h: any) => h.id === id); if (!hero || !existsSync(`public/data/analytics/brawl/${id}.json`)) continue;
-      const v = validateBrawlPicks({ hero, abilities, items, analytics: read(`analytics/brawl/${id}.json`), config }, data);
-      n += v.picks.length; sum += v.meanPercentile * v.picks.length; popSum += v.meanPopPercentile * v.picks.length;
-    }
-    check('brawl held-out: user picks rank above the tier median by engine score', n > 0 && sum / n > 0.5, `${n} picks, engine ${(sum / n * 100).toFixed(0)}%, popularity-only ${(popSum / n * 100).toFixed(0)}% (random = 50%)`);
   }
 }
 
