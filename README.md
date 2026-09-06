@@ -171,10 +171,15 @@ score(card) = 1.0 · sqrt(pop)      pop     = matches / matches of the most-pick
 * With several sets given at once (CLI, offline) the pick is the best of the one-per-set combinations,
   adding pair synergy between the picks themselves; two copies of the same item in one round are penalised.
   The app passes the single visible set.
-* Reroll: for each set, the expected best base score of three fresh cards is computed exactly from the
-  round's tier pool (`E[max of 3] = Σ s_(k) (F_k³ − F_{k−1}³)` over the score-sorted pool, mixing the normal
-  and rare tier by the config's rare chance per card). The set whose best card falls more than 0.1 below
-  that expectation is the reroll candidate.
+* Reroll: for each set, the expected best score of three fresh cards is computed exactly from the round's
+  tier pool (every draftable item of the tier, `P(max ≤ v) = Π_j F_j(v)` over the per-slot score distributions,
+  mixing the normal and rare tier by the rare chance per card). An ENHANCED flag belongs to the slot and
+  survives a re-roll, so an enhanced slot is drawn enhanced; unseen slots draw it at the enhanced chance. The
+  rare and enhanced chances are the rates seen on screen (4 and 3 of the 27 fixture cards: 15 % and 11 %;
+  `RARE_PER_CARD` / `ENHANCED_PER_CARD` in `engine.ts`), not the config's weight tables, which read as 39 % and
+  26 % per card and made a fresh set look better than the best card of its tier. The set whose best card is
+  expected to be beaten by a fresh draw is the reroll candidate; the value of saving the round's one re-roll
+  for a later set (backward induction over the later sets' best-of-3 distributions) is shown alongside.
 
 ```
 npm run brawl -- --hero 1 --pool                                   # top items per tier, sanity check
