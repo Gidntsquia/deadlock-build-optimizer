@@ -60,7 +60,6 @@ h1, h2, h3 { margin: 0; font-weight: 800; }
 .tile .active-tag { position: absolute; left: 50%; transform: translateX(-50%); bottom: 34px; background: #2d2418; color: #f2e7cf; font-size: 8px; font-weight: 900; letter-spacing: .5px; padding: 2px 5px; border-radius: 3px; }
 .tile .mark { position: absolute; bottom: 34px; right: 3px; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 900; color: #fff; }
 .tile .mark.core { background: var(--good); }
-.tile .mark.stretch { background: var(--warn); }
 .board-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 6px 4px 0; font-weight: 800; }
 .souls { display: inline-flex; align-items: center; gap: 5px; }
 .souls::before { content: ""; width: 12px; height: 16px; background: currentColor; border-radius: 6px 6px 6px 6px / 8px 8px 8px 8px; clip-path: polygon(50% 0, 100% 25%, 65% 50%, 100% 75%, 50% 100%, 0 75%, 35% 50%, 0 25%); }
@@ -87,7 +86,7 @@ h1, h2, h3 { margin: 0; font-weight: 800; }
 .ap-names div { display: flex; align-items: center; gap: 6px; }
 .ap-names img { width: 22px; height: 22px; background: #f3ead6; border-radius: 3px; padding: 1px; }
 
-/* secondary panels: validation and personal history, quieter parchment */
+/* secondary panels: validation, quieter parchment */
 .panel { margin: 0 10px 14px; background: rgba(203,189,159,.12); border: 1px solid rgba(203,189,159,.25); border-radius: 8px; padding: 12px; }
 .panel h2 { font-size: 16px; margin-bottom: 4px; }
 .panel .muted { font-size: 12px; opacity: .7; }
@@ -101,7 +100,6 @@ h1, h2, h3 { margin: 0; font-weight: 800; }
 .badge { font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 999px; }
 .badge.core { background: var(--good); color: #fff; }
 .badge.notcore { background: rgba(255,255,255,.18); }
-.badge.stretch { background: var(--warn); color: #fff; }
 
 /* item detail sheet, styled as a shop tooltip on parchment */
 .sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }

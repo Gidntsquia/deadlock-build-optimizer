@@ -4,8 +4,8 @@ import type { Item } from '../types';
 const ROMAN = ['', 'I', 'II', 'III', 'IV'];
 
 // One shop-style item card: slot-tinted art, roman tier tab top-right, name plate below.
-export function ItemTile({ item, order, isCore, stretch, onClick, ariaLabel, total, cost }: {
-  item: Item; order?: number; isCore?: boolean; stretch?: boolean; onClick?: () => void; ariaLabel?: string; total?: number; cost?: number;
+export function ItemTile({ item, order, isCore, onClick, ariaLabel, total, cost }: {
+  item: Item; order?: number; isCore?: boolean; onClick?: () => void; ariaLabel?: string; total?: number; cost?: number;
 }) {
   const Tag = onClick ? 'button' : 'div';
   return (
@@ -15,7 +15,6 @@ export function ItemTile({ item, order, isCore, stretch, onClick, ariaLabel, tot
       {order !== undefined && <span className="order">{order}</span>}
       {item.is_active_item && <span className="active-tag">ACTIVE</span>}
       {isCore && <span className="mark core" title="In the top player's core set">✓</span>}
-      {!isCore && stretch && <span className="mark stretch" title="Past your median net worth">$</span>}
       <span className="plate">{item.name}</span>
     </Tag>
   );

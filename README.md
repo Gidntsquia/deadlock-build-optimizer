@@ -24,7 +24,7 @@ of the game, or on your phone.
 Requires Node 18+.
 
 ```
-git clone https://github.com/Gidntsquia/deadlock-build-optimizer
+git clone <this repository's URL>
 cd deadlock-build-optimizer
 npm install
 npm run fetch-data   # Downloads everything from the API into public/data/. Takes ~3 min, ~16 MB.
@@ -58,7 +58,6 @@ npm run verify               # Runs all the checks and prints the held-out score
 - Each build is checked against a top player's last 30 games. The four players
   I check against currently get 64-75% agreement, and the app lists the items
   from their core set that the build is missing.
-- Items past your usual final net worth are marked as "stretch" items.
 - Street Brawl: the cards, round number, enemy heroes, and the items you've
   already picked are all read from the screen. Nothing is sent to the game.
 - The overlay works in Chrome and Edge. Firefox can't do always-on-top windows,
@@ -69,16 +68,16 @@ npm run verify               # Runs all the checks and prints the held-out score
 ## Documentation 📚
 
 More details in the
-[wiki](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki):
+[wiki](../../wiki):
 
-- [Data Pipeline](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Data-Pipeline) — what `fetch-data` downloads, rank filtering, rate limits
-- [How the Build Generator Works](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/How-the-Build-Generator-Works) — the scoring formula, buy order, ability order
-- [Held-out Validation](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Held-out-Validation) — the four top players and how agreement is measured
-- [Street Brawl Advisor](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Street-Brawl-Advisor) — card scoring, re-roll math, the CLI
-- [Screen Reader](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Screen-Reader) — how cards, round numbers, hero portraits and picks are recognized
-- [Overlay and Phone Display](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Overlay-and-Phone-Display) — screen capture, Picture-in-Picture, ntfy.sh
-- [Judgment Calls](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Judgment-Calls) — the weight changes and the reasoning behind them
-- [Development](https://github.com/Gidntsquia/deadlock-build-optimizer/wiki/Development) — code layout, scripts, tests
+- [Data Pipeline](../../wiki/Data-Pipeline) — what `fetch-data` downloads, rank filtering, rate limits
+- [How the Build Generator Works](../../wiki/How-the-Build-Generator-Works) — the scoring formula, buy order, ability order
+- [Held-out Validation](../../wiki/Held-out-Validation) — the four top players and how agreement is measured
+- [Street Brawl Advisor](../../wiki/Street-Brawl-Advisor) — card scoring, re-roll math, the CLI
+- [Screen Reader](../../wiki/Screen-Reader) — how cards, round numbers, hero portraits and picks are recognized
+- [Overlay and Phone Display](../../wiki/Overlay-and-Phone-Display) — screen capture, Picture-in-Picture, ntfy.sh
+- [Judgment Calls](../../wiki/Judgment-Calls) — the weight changes and the reasoning behind them
+- [Development](../../wiki/Development) — code layout, scripts, tests
 
 ## License 📄
 

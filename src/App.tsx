@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Ability, Build, Hero, HeroAnalytics, Item } from './types';
-import { img, loadAnalytics, loadCore, loadUser, type Manifest } from './data/load';
+import { img, loadAnalytics, loadCore, type Manifest } from './data/load';
 import { generateBuilds } from './generator';
 import { computeCoreSet, loadHeldout, validateBuild, type CoreSet, type HeldoutPurchases } from './validation/heldout';
-import { personalInsight, type UserHistory } from './personal';
 import { BuildView } from './components/BuildView';
 import { BrawlView } from './components/BrawlView';
 
@@ -15,7 +14,6 @@ export default function App() {
   const [abilities, setAbilities] = useState<Ability[]>([]);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [heldout, setHeldout] = useState<HeldoutPurchases | null>(null);
-  const [user, setUser] = useState<UserHistory | null>(null);
   const [heroId, setHeroId] = useState(INFERNUS);
   const [analytics, setAnalytics] = useState<HeroAnalytics | null>(null);
   const [tab, setTab] = useState(0);
@@ -25,7 +23,6 @@ export default function App() {
 
   useEffect(() => {
     loadCore().then(([i, h, a, m]) => { setItems(i); setHeroes(h); setAbilities(a); setManifest(m); }).catch((e) => setError(String(e)));
-    loadUser().then(setUser).catch(() => setUser(null));
   }, []);
   useEffect(() => { setAnalytics(null); loadAnalytics(heroId).then(setAnalytics).catch((e) => setError(String(e))); }, [heroId]);
   // held-out top-player set for this hero, if the snapshot has one
@@ -39,7 +36,6 @@ export default function App() {
   const builds: Build[] = useMemo(() => (hero && analytics && items.length ? generateBuilds({ hero, abilities, items, analytics }) : []), [hero, abilities, items, analytics]);
   const core: CoreSet | null = useMemo(() => (heldout && heldout.hero_id === heroId && items.length ? computeCoreSet(heldout, items) : null), [heldout, items, heroId]);
   const validations = useMemo(() => (core ? builds.map((b) => validateBuild(b, core)) : []), [builds, core]);
-  const insight = useMemo(() => (user ? personalInsight(user, heroId) : null), [user, heroId]);
   const build = builds[Math.min(tab, builds.length - 1)];
 
   if (error) return <div className="error">{error}</div>;
@@ -72,7 +68,7 @@ export default function App() {
       {mode === 'build' && !analytics && <div className="loading">Generating builds…</div>}
       {mode === 'build' && builds.length > 0 && (
         <>
-          {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={core} insight={insight} heroName={hero.name} heroImage={img(hero.images.small)} fetchedAt={manifest?.fetched_at.slice(0, 10)} />}
+          {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={core} heroName={hero.name} heroImage={img(hero.images.small)} fetchedAt={manifest?.fetched_at.slice(0, 10)} />}
         </>
       )}
       <footer>Data: deadlock-api.com (aggregate analytics, assets). Builds are generated deterministically from the local snapshot; see README for the scoring function.</footer>

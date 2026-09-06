@@ -6,13 +6,13 @@
 //   public/data/heroes.json                active heroes with base stats + growth
 //   public/data/abilities.json             abilities of active heroes (names, upgrades)
 //   public/data/analytics/<hero_id>.json   item-stats, ability-order-stats, item-permutation-stats
-//   public/data/user/history.json          the user's standard-mode match summary (personalization)
 //   public/data/validation/<account>-<hero>.json  a top player's ~30 most recent matches on one hero with
 //                                          per-match purchases                     (VALIDATION ONLY)
 //   public/data/img/{items,heroes,abilities}/  webp images so the app needs no network at all
 //   public/data/brawl-config.json          Street Brawl mode constants (round budgets, draft tiers/weights)
 //   public/data/analytics/brawl/<hero_id>.json  Street Brawl item-stats, pair stats, and item-stats vs every enemy hero
-//   public/data/validation/brawl-<account>.json the user's Street Brawl matches with per-round picks (VALIDATION ONLY)
+//   public/data/validation/brawl-<account>.json your Street Brawl matches with per-round picks (VALIDATION ONLY;
+//                                          only when DEADLOCK_ACCOUNT_ID is set)
 //   public/data/manifest.json              timestamps + counts
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -20,7 +20,9 @@ import path from 'node:path';
 const API = 'https://api.deadlock-api.com';
 const ASSETS = 'https://assets.deadlock-api.com';
 const OUT = path.resolve('public/data');
-const USER = 267836488;
+// Optional: your own account id (the number in your deadlock-api / Steam3 profile). Only used to fetch your
+// Street Brawl matches as a held-out validation set. Leave unset to skip that step.
+const USER = Number(process.env.DEADLOCK_ACCOUNT_ID) || null;
 // Held-out validation sets: (top player, hero). Never read by the generator.
 const VALIDATION_SETS = [
   { account_id: 35187362, player: 'Zergggy', hero_id: 1, hero: 'Infernus' },
@@ -160,7 +162,7 @@ async function fetchPopulation(heroId, extra = '') {
 }
 
 async function fetchAnalytics(heroes, manifest) {
-  console.log(`4/6 per-hero analytics (${heroes.length} heroes, all ranks + badge>=${TOP_BADGE})`);
+  console.log(`4/5 per-hero analytics (${heroes.length} heroes, all ranks + badge>=${TOP_BADGE})`);
   for (const h of heroes) {
     const all = await fetchPopulation(h.id);
     const top = await fetchPopulation(h.id, `&min_average_badge=${TOP_BADGE}`);
@@ -173,7 +175,7 @@ async function fetchAnalytics(heroes, manifest) {
 }
 
 async function fetchValidation(manifest) {
-  console.log('6/6 held-out top-player matches (validation only)');
+  console.log('5/5 held-out top-player matches (validation only)');
   manifest.validation_sets = [];
   const histories = new Map();
   for (const v of VALIDATION_SETS) {
@@ -237,7 +239,8 @@ async function fetchBrawlAnalytics(heroes) {
 
 // Metadata for old matches often 503s; tries are kept low so one dead match does not stall the run.
 async function fetchBrawlUser(heroes, manifest) {
-  console.log('brawl 3/3 user Street Brawl matches (validation only)');
+  if (!USER) { console.log('brawl 3/3 skipped: set DEADLOCK_ACCOUNT_ID to fetch your Street Brawl matches for validation'); return; }
+  console.log('brawl 3/3 your Street Brawl matches (validation only)');
   const hist = await getJson(`${API}/v1/players/${USER}/match-history`);
   const brawl = hist.filter((m) => m.game_mode === BRAWL_GAME_MODE_ID).sort((a, b) => b.start_time - a.start_time);
   // the metadata endpoint is throttled to roughly one call a minute; keep what earlier runs fetched and add the rest
@@ -294,7 +297,7 @@ async function main() {
   }
   const manifest = { fetched_at: new Date().toISOString(), min_unix_timestamp: MIN_TS, window_days: WINDOW_DAYS, counts: {} };
 
-  console.log('1/6 item catalog');
+  console.log('1/5 item catalog');
   const items = (await getJson(`${ASSETS}/v2/items/by-type/upgrade`)).map(slimItem);
   console.log(`   downloading ${items.length} item images`);
   for (const it of items) {
@@ -306,7 +309,7 @@ async function main() {
   manifest.counts.items = items.length;
   manifest.counts.shopable_items = items.filter((i) => i.shopable && !i.disabled).length;
 
-  console.log('2/6 heroes');
+  console.log('2/5 heroes');
   const heroesRaw = await getJson(`${ASSETS}/v2/heroes`);
   const active = heroesRaw.filter((h) => h.player_selectable && !h.disabled && !h.in_development);
   const heroes = active.map(slimHero);
@@ -318,7 +321,7 @@ async function main() {
   await save('heroes.json', heroes);
   manifest.counts.heroes = heroes.length;
 
-  console.log('3/6 abilities');
+  console.log('3/5 abilities');
   const abilitiesRaw = await getJson(`${ASSETS}/v2/items/by-type/ability`);
   const activeIds = new Set(active.map((h) => h.id));
   const abilities = abilitiesRaw.filter((a) => activeIds.has(a.hero)).map(slimAbility);
@@ -328,16 +331,6 @@ async function main() {
   manifest.counts.abilities = abilities.length;
 
   await fetchAnalytics(heroes, manifest);
-
-  console.log('5/6 user history (personalization)');
-  const userHist = await getJson(`${API}/v1/players/${USER}/match-history`);
-  // Standard mode = Unranked(1)/Ranked(2) matchmaking in the normal game mode(1).
-  const std = userHist.filter((m) => (m.match_mode === 1 || m.match_mode === 2) && m.game_mode === 1);
-  await save('user/history.json', {
-    account_id: USER,
-    matches: std.map((m) => ({ match_id: m.match_id, hero_id: m.hero_id, start_time: m.start_time, match_duration_s: m.match_duration_s, match_result: m.match_result, player_team: m.player_team, net_worth: m.net_worth })),
-  });
-  manifest.counts.user_matches = std.length;
 
   await fetchValidation(manifest);
   await fetchBrawl(heroes, manifest);

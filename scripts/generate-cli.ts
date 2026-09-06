@@ -3,7 +3,6 @@
 import { readFileSync } from 'node:fs';
 import { generateBuilds } from '../src/generator';
 import { computeCoreSet, validateBuild } from '../src/validation/heldout';
-import { personalInsight } from '../src/personal';
 
 const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
 const args = process.argv.slice(2);
@@ -24,8 +23,7 @@ const fmt = (s: number) => { const t = Math.round(s); return `${Math.floor(t / 6
 let core = null as ReturnType<typeof computeCoreSet> | null;
 const vset = read('manifest.json').validation_sets?.find((v: any) => v.hero_id === heroId);
 if (vset) core = computeCoreSet(read(vset.file), items);
-const insight = personalInsight(read('user/history.json'), heroId);
-console.log(`# ${hero.name} — ${builds.length} builds. User budget ${insight.budget} souls (median NW), median length ${fmt(insight.medianDurationS)}`);
+console.log(`# ${hero.name} — ${builds.length} builds.`);
 const pop = builds[0]?.population;
 if (pop) console.log(`population: ${pop.kind === 'top' ? `high-rank lobbies (avg badge >= ${pop.minBadge})` : 'all ranks'}, ${pop.matches.toLocaleString()} matches on the most-bought item; ability sequences from ${pop.abilitySequenceKind === 'top' ? 'high-rank' : 'all-rank'} data`);
 for (const b of builds) {

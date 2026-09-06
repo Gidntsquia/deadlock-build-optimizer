@@ -2,8 +2,7 @@ import { img } from '../data/load';
 import { useState } from 'react';
 import type { Build, BuildItem, Phase } from '../types';
 import type { BuildValidation, CoreSet } from '../validation/heldout';
-import type { PersonalInsight } from '../personal';
-import { fmtSouls, fmtTime } from '../text';
+import { fmtSouls } from '../text';
 import { ItemCard } from './ItemCard';
 import { ItemTile } from './ItemTile';
 import { renderBuildPng } from '../export/png';
@@ -12,7 +11,7 @@ const PHASES: { key: Phase; label: string }[] = [{ key: 'early', label: 'Early G
 // Ability points spent per step, as the in-game board labels them: unlock is free, tiers cost 1 / 2 / 5.
 const AP_COST = { unlock: '', tier1: '1', tier2: '2', tier3: '5' } as const;
 
-export function BuildView({ build, validation, core, insight, heroName, heroImage, fetchedAt }: { build: Build; validation: BuildValidation | null; core: CoreSet | null; insight: PersonalInsight | null; heroName: string; heroImage?: string; fetchedAt?: string }) {
+export function BuildView({ build, validation, core, heroName, heroImage, fetchedAt }: { build: Build; validation: BuildValidation | null; core: CoreSet | null; heroName: string; heroImage?: string; fetchedAt?: string }) {
   const [open, setOpen] = useState<BuildItem | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const slug = `${heroName}-${build.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -26,11 +25,9 @@ export function BuildView({ build, validation, core, insight, heroName, heroImag
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } catch (e) { alert(`PNG export failed: ${e}`); } finally { setBusy(null); }
   };
-  const budget = insight?.budget ?? Infinity;
   const abilities = [...new Map(build.abilityOrder.map((s) => [s.ability.id, s.ability])).values()];
   const steps = build.abilityOrder.length;
   const hasCore = Boolean(validation);
-  const hasStretch = build.items.some((b) => b.runningTotal > budget);
 
   return (
     <>
@@ -52,7 +49,7 @@ export function BuildView({ build, validation, core, insight, heroName, heroImag
               <div className="phase-head"><span>{p.label}</span><small>{fmtSouls(rows[rows.length - 1].runningTotal)} souls by end</small></div>
               <div className="tiles">
                 {rows.map((b) => (
-                  <ItemTile key={b.item.id} item={b.item} order={b.order} isCore={validation?.badges[b.item.id]} stretch={b.runningTotal > budget} total={b.runningTotal} cost={b.paidCost}
+                  <ItemTile key={b.item.id} item={b.item} order={b.order} isCore={validation?.badges[b.item.id]} total={b.runningTotal} cost={b.paidCost}
                     onClick={() => setOpen(b)} ariaLabel={`${b.item.name}, ${b.paidCost} souls${b.upgradesFrom ? ` (upgrade from ${b.upgradesFrom.name})` : ''}, buy ${b.order}`} />
                 ))}
               </div>
@@ -65,10 +62,9 @@ export function BuildView({ build, validation, core, insight, heroName, heroImag
             ? `Built from high-rank lobbies (average badge ${build.population.minBadge}+, Phantom and above), ${build.population.matches.toLocaleString()} matches.`
             : `Built from all ranks, ${build.population.matches.toLocaleString()} matches. Not enough high-rank games for this hero.`}
         </div>
-        {(hasCore || hasStretch) && (
+        {hasCore && (
           <div className="legend">
             {hasCore && <span><i style={{ background: 'var(--good)' }} /> in {core?.player}'s core set</span>}
-            {hasStretch && <span><i style={{ background: 'var(--warn)' }} /> past your usual net worth</span>}
             <span>numbers are buy order</span>
           </div>
         )}
@@ -114,19 +110,6 @@ export function BuildView({ build, validation, core, insight, heroName, heroImag
             <div className="muted" style={{ marginTop: 8 }}>Core items this build skipped:</div>
             <div className="chips">{validation.missingCore.map((c) => <span className="chip" key={c.item.id}>{c.item.name} {(c.frequency * 100).toFixed(0)}%</span>)}</div>
           </>}
-        </div>
-      )}
-
-      {insight && (
-        <div className="panel">
-          <h2>Your games</h2>
-          <div className="kv">
-            <span>Standard-mode matches on record</span><span>{insight.matches}</span>
-            <span>Median match length</span><span>{fmtTime(insight.medianDurationS)}</span>
-            <span>Median final net worth{insight.heroMatches >= 10 ? ` on ${heroName}` : ''}</span><span>{fmtSouls(insight.medianNetWorth)}</span>
-            {insight.heroMatches > 0 && <><span>{heroName} games / win rate</span><span>{insight.heroMatches} / {((insight.heroWinRate ?? 0) * 100).toFixed(0)}%</span></>}
-          </div>
-          <div className="muted" style={{ marginTop: 6 }}>Items past your median net worth ({fmtSouls(insight.budget)}) get an orange <b>$</b> mark: buy them only when the game runs long.</div>
         </div>
       )}
 

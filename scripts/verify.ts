@@ -70,7 +70,7 @@ if (existsSync('public/data/brawl-config.json') && existsSync('public/data/analy
   const legendaries = items.filter((i: any) => i.item_tier === 5);
   check('catalog keeps the tier-5 legendaries', legendaries.length >= 20, `${legendaries.length} (${legendaries.filter((i: any) => !i.disabled).length} enabled)`);
   const brawlSrc = readdirSync('src/brawl').map((f) => readFileSync(`src/brawl/${f}`, 'utf8')).join('\n');
-  check('brawl engine reads no validation data', !/validation\/|brawl-\d|267836488/.test(brawlSrc));
+  check('brawl engine reads no validation data', !/validation\/|brawl-\d/.test(brawlSrc));
   let ok = true; const why: string[] = [];
   for (const hero of brawlHeroes) {
     try {
@@ -99,8 +99,8 @@ if (existsSync('public/data/brawl-config.json') && existsSync('public/data/analy
     const m = out.match(/(\d+)\/(\d+) labels/);
     check('brawl recogniser reads >= 95 % of screen labels (round, choice, own hero, eight portraits)', !!m && Number(m[1]) / Number(m[2]) >= 0.95, m ? m[0] : out.slice(-200));
   }
-  const userFile = manifest.brawl?.user_file ?? 'validation/brawl-267836488.json';
-  if (existsSync(`public/data/${userFile}`)) {
+  const userFile = manifest.brawl?.user_file;
+  if (userFile && existsSync(`public/data/${userFile}`)) {
     const data = read(userFile);
     let n = 0, sum = 0, popSum = 0;
     for (const id of new Set<number>(data.matches.map((m: any) => m.hero_id))) {
