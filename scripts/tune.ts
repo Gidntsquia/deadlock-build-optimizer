@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { generateBuilds } from '../src/generator';
 import { PARAMS } from '../src/generator/stats';
-import { computeCoreSet, validateAgainstPanel } from '../src/validation/heldout';
+import { computeCoreSet, panelAgreementAcrossBuilds } from '../src/validation/heldout';
 
 const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
 const items = read('items.json'), heroes = read('heroes.json'), abilities = read('abilities.json'), manifest = read('manifest.json');
@@ -18,7 +18,7 @@ const perHero = heroes.map((hero: any) => {
 function evaluate(): { mean: number; median: number; min: number; byHero: { hero: string; a: number }[] } {
   const byHero = perHero.map((h: any) => {
     const builds = generateBuilds({ hero: h.hero, abilities, items, analytics: h.analytics });
-    const a = Math.max(...builds.map((b) => validateAgainstPanel(b, h.panel).agreement));
+    const a = panelAgreementAcrossBuilds(builds, h.panel).agreement;
     return { hero: h.hero.name, a };
   });
   const s = byHero.map((x: any) => x.a).sort((x: number, y: number) => x - y);

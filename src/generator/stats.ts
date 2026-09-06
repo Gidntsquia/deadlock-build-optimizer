@@ -47,3 +47,6 @@ export const WEIGHTS = PARAMS.weights;
 // top_min_average_badge, currently 90 = Phantom+) when it has enough data, else fall back to all ranks.
 export const MIN_TOP_ITEM_MATCHES = 500;    // the hero's most-bought item needs >=500 high-rank matches
 export const MIN_TOP_SEQ_MATCHES = 200;     // the best high-rank ability sequence needs >=200 matches
+// Build styles (detected at fetch time, scripts/styles.mjs): a style population is only used when its
+// most-bought item has this many matches; otherwise the hero falls back to one build.
+export const MIN_STYLE_MATCHES = 300;

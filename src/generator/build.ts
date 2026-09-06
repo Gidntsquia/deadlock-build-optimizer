@@ -2,7 +2,7 @@
 // analytics snapshot for the hero (item-stats, ability-order-stats, item-permutation-stats).
 // It never reads any per-player data.
 import type { Ability, AnalyticsPopulation, Build, BuildItem, BuildPopulation, Hero, HeroAnalytics, Item, ItemStat, Phase, SlotType } from '../types';
-import { ARCHETYPES, MIN_TOP_ITEM_MATCHES, MIN_TOP_SEQ_MATCHES, PARAMS, UNIT_VALUE, type Archetype } from './stats';
+import { ARCHETYPES, MIN_STYLE_MATCHES, MIN_TOP_ITEM_MATCHES, MIN_TOP_SEQ_MATCHES, PARAMS, UNIT_VALUE, type Archetype } from './stats';
 import { kitProfile } from './kit';
 import { pickAbilityOrder } from './abilities';
 
@@ -47,14 +47,65 @@ export function choosePopulation(analytics: HeroAnalytics): { items: AnalyticsPo
   };
 }
 
+export type Population = ReturnType<typeof choosePopulation>;
+
+const SLOT_NAME: Record<SlotType, string> = { weapon: 'Weapon build', vitality: 'Vitality build', spirit: 'Spirit build' };
+
+/**
+ * One population per established build style, or an empty list when the hero has a single style.
+ * Styles are detected at fetch time from conditional aggregate stats (scripts/styles.mjs): the main
+ * style is the high-rank population minus the games built around any alternative style's anchors, and
+ * each alternative style is the population of games where its seed item was bought. Every style must
+ * have enough games behind it, else the hero falls back to one build from the whole population.
+ */
+export function stylePopulations(input: GeneratorInput): Population[] {
+  const styles = input.analytics.top?.styles ?? [];
+  const base = choosePopulation(input.analytics);
+  if (styles.length < 2 || base.info.kind !== 'top') return [];
+  if (styles.some((s) => s.matches < MIN_STYLE_MATCHES)) return [];
+  const catalog = new Map(input.items.map((i) => [i.id, i]));
+  const usage = styles.map((s) => { const n = Math.max(1, ...s.item_stats.map((x) => x.matches)); return new Map(s.item_stats.map((x) => [x.item_id, x.matches / n])); });
+  const named = styles.map((s, k) => {
+    // defining items: bought in >=40% of this style's games and clearly more than in any other style
+    const defining = [...usage[k]]
+      .filter(([id, u]) => catalog.has(id) && u >= 0.4)
+      .map(([id, u]) => ({ item: catalog.get(id)!, edge: u - Math.max(0, ...usage.filter((_, j) => j !== k).map((o) => o.get(id) ?? 0)) }))
+      .filter((d) => d.edge > 0.15)
+      .sort((a, b) => b.edge - a.edge || a.item.id - b.item.id).slice(0, 5);
+    const bySlot: Record<SlotType, number> = { weapon: 0, vitality: 0, spirit: 0 };
+    for (const d of defining) bySlot[d.item.item_slot_type] += d.edge;
+    const slot = (Object.keys(bySlot) as SlotType[]).sort((a, b) => bySlot[b] - bySlot[a])[0];
+    return { s, defining: defining.map((d) => d.item), name: defining.length ? SLOT_NAME[slot] : null };
+  });
+  const dup = (n: string | null) => n === null || named.filter((x) => x.name === n).length > 1;
+  return named.map(({ s, defining, name }): Population => {
+    const seed = s.seed === null ? null : catalog.get(s.seed) ?? null;
+    const anchors = s.anchors.map((id) => catalog.get(id)).filter((i): i is Item => !!i);
+    const exclude = s.exclude.map((id) => catalog.get(id)).filter((i): i is Item => !!i);
+    const seqMatches = Math.max(0, ...s.ability_order_stats.map((x) => x.matches));
+    const abilities = seqMatches >= MIN_TOP_SEQ_MATCHES ? s : base.abilities;
+    const finalName = dup(name) ? (seed ? `${seed.name} build` : 'Standard build') : name!;
+    const tagline = seed
+      ? `Games built around ${seed.name} (${(s.share * 100).toFixed(0)}% of high-rank games). Defining items: ${defining.map((i) => i.name).join(', ') || anchors.map((i) => i.name).join(', ')}.`
+      : `The common build (${(s.share * 100).toFixed(0)}% of high-rank games), leaving out games built around ${exclude.map((i) => i.name).join(', ')}.`;
+    return {
+      items: { item_stats: s.item_stats, ability_order_stats: s.ability_order_stats, permutation_stats: base.items.permutation_stats },
+      abilities: { item_stats: abilities.item_stats, ability_order_stats: abilities.ability_order_stats, permutation_stats: base.items.permutation_stats },
+      info: { kind: 'top', minBadge: base.info.minBadge, matches: s.matches, abilitySequenceKind: seqMatches >= MIN_TOP_SEQ_MATCHES || base.info.abilitySequenceKind === 'top' ? 'top' : 'all', style: { key: s.key, share: s.share, seed, anchors, exclude, defining, name: finalName, tagline } },
+    };
+  });
+}
+
 export function generateBuilds(input: GeneratorInput): Build[] {
+  const styled = stylePopulations(input);
+  if (styled.length >= 2) return styled.map((p) => generateBuild(input, ARCHETYPES[0], p));
   return ARCHETYPES.map((a) => generateBuild(input, a));
 }
 
-export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
+export function generateBuild(input: GeneratorInput, arch: Archetype, population?: Population): Build {
   const { hero, abilities, items } = input;
   const { weights: WEIGHTS, winShrinkFrac: WIN_SHRINK_FRAC, minUsage: MIN_USAGE, maxItems: MAX_ITEMS, minItems: MIN_ITEMS, maxUpgradeSteps: MAX_UPGRADE_STEPS, slotCap: SLOT_CAP, maxActives: MAX_ACTIVES, phaseTimeS: PHASE_TIME_S, tierMin: TIER_MIN, pairMinMatches } = PARAMS;
-  const pop = choosePopulation(input.analytics);
+  const pop = population ?? choosePopulation(input.analytics);
   const analytics = pop.items;
   const catalog = new Map(items.filter((i) => i.shopable && !i.disabled && i.cost > 0).map((i) => [i.id, i]));
   const kit = kitProfile(hero, abilities);
@@ -196,8 +247,9 @@ export function generateBuild(input: GeneratorInput, arch: Archetype): Build {
   if (phases.size < 3) buildItems.forEach((b, i) => { b.phase = i < buildItems.length / 3 ? 'early' : i < (2 * buildItems.length) / 3 ? 'mid' : 'late'; });
 
   const ab = pickAbilityOrder(hero, abilities, pop.abilities.ability_order_stats);
+  const style = pop.info.style;
   return {
-    key: arch.key, name: arch.name, tagline: arch.tagline, heroId: hero.id,
+    key: style ? style.key : arch.key, name: style ? style.name : arch.name, tagline: style ? style.tagline : arch.tagline, heroId: hero.id,
     items: buildItems, totalCost: running,
     abilityOrder: ab.steps, abilityOrderSupport: ab.support,
     population: pop.info,

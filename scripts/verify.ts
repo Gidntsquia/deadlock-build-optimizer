@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { generateBuilds } from '../src/generator';
-import { computeCoreSet, validateAgainstPanel } from '../src/validation/heldout';
+import { computeCoreSet, panelAgreementAcrossBuilds, validateAgainstPanel } from '../src/validation/heldout';
 import { adviseDraft, baseScores } from '../src/brawl';
 
 const read = (p: string) => JSON.parse(readFileSync(`public/data/${p}`, 'utf8'));
@@ -59,15 +59,16 @@ for (const hero of heroes) {
   if (!sets.length) continue;
   const builds = generateBuilds({ hero, abilities, items, analytics: read(`analytics/${hero.id}.json`) });
   const panel = sets.map((set) => ({ set, core: computeCoreSet(read(set.file), items) }));
-  let best = 0; let ok = true; const why: string[] = [];
+  let ok = true; const why: string[] = [];
   for (const bld of builds) {
     const val = validateAgainstPanel(bld, panel);
     const okB = val.players.length === sets.length && val.agreement >= 0 && val.agreement <= 1 && val.players.every((p) => p.validation.agreement >= 0 && p.validation.agreement <= 1 && bld.items.every((i) => typeof val.consensusBadges[i.item.id] === 'number'));
     if (!okB) { ok = false; why.push(bld.name); }
-    best = Math.max(best, val.agreement);
   }
-  heroAgreement.push({ hero: hero.name, agreement: best });
-  check(`${hero.name}: panel of ${sets.length} (${sets.map((s) => s.player).join(', ')}) agreement in [0,1] + badges`, ok, ok ? `best build ${(best * 100).toFixed(0)}%` : why.join('; '));
+  const across = panelAgreementAcrossBuilds(builds, panel);
+  heroAgreement.push({ hero: hero.name, agreement: across.agreement });
+  const styleNote = builds.length > 1 ? `; ${builds.length} builds (${builds.map((b) => `${b.name} ${across.perRep.filter((r) => r.buildKey === b.key).length} reps`).join(', ')})` : '';
+  check(`${hero.name}: panel of ${sets.length} (${sets.map((s) => s.player).join(', ')}) agreement in [0,1] + badges`, ok, ok ? `agreement ${(across.agreement * 100).toFixed(0)}%${styleNote}` : why.join('; '));
 }
 if (heroAgreement.length) {
   const sorted = [...heroAgreement].sort((x, y) => x.agreement - y.agreement);

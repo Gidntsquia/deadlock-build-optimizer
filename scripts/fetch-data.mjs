@@ -5,7 +5,8 @@
 //   public/data/items.json                 item catalog (all upgrade items)
 //   public/data/heroes.json                active heroes with base stats + growth
 //   public/data/abilities.json             abilities of active heroes (names, upgrades)
-//   public/data/analytics/<hero_id>.json   item-stats, ability-order-stats, item-permutation-stats
+//   public/data/analytics/<hero_id>.json   item-stats, ability-order-stats, item-permutation-stats, and (top population)
+//                                          build styles: per-style item/ability stats (see scripts/styles.mjs)
 //   public/data/validation/<account>-<hero>.json  a top player's ~20 most recent matchmaking matches on one hero
 //                                          with per-match purchases; 5 players per hero, chosen automatically
 //                                          from the Phantom+ scoreboard (see selectValidationPlayers)   (VALIDATION ONLY)
@@ -24,6 +25,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const API = 'https://api.deadlock-api.com';
+import { detectStyles, usageOf, STYLE } from './styles.mjs';
 const ASSETS = 'https://assets.deadlock-api.com';
 const OUT = path.resolve('public/data');
 // Held-out validation sets: for every active hero, VALIDATION_PLAYERS_PER_HERO top players chosen
@@ -181,14 +183,47 @@ async function fetchPopulation(heroId, extra = '') {
   return { item_stats, ability_order_stats: abilitySeqs, permutation_stats: pairs };
 }
 
+// Build styles. For every candidate anchor item we fetch the hero's item stats CONDITIONAL on that
+// item having been bought (include_item_ids). detectStyles() picks the anchors whose games look
+// materially different from the population (see scripts/styles.mjs). Each detected style then gets its
+// own item + ability-order population (include the style's seed item); the main style is the population
+// with every alternative anchor excluded, so each build is generated from games played its way.
+async function fetchStyles(hero, topQ, top, shopIds) {
+  const { n: N, u } = usageOf(top.item_stats.filter((s) => shopIds.has(s.item_id)));
+  const cands = [...u].filter(([, x]) => x >= STYLE.candidateShare[0] && x <= STYLE.candidateShare[1]).map(([id]) => id);
+  const conditional = {};
+  for (const id of cands) conditional[id] = (await getJson(`${API}/v1/analytics/item-stats?${topQ}&include_item_ids=${id}`)).filter((s) => shopIds.has(s.item_id));
+  const found = detectStyles(top.item_stats.filter((s) => shopIds.has(s.item_id)), conditional);
+  if (!found.length) return { styles: [], scanned: cands.length };
+  const population = async (filter) => {
+    const [item_stats, ability_order_stats] = await Promise.all([
+      getJson(`${API}/v1/analytics/item-stats?${topQ}${filter}`),
+      getJson(`${API}/v1/analytics/ability-order-stats?${topQ}${filter}&min_matches=5`),
+    ]);
+    return { item_stats, ability_order_stats: [...ability_order_stats].sort((a, b) => b.matches - a.matches).slice(0, 400) };
+  };
+  const excluded = found.flatMap((s) => s.anchors);
+  const main = await population(`&exclude_item_ids=${excluded.join(',')}`);
+  const styles = [{ key: 'main', seed: null, anchors: [], exclude: excluded, matches: Math.max(0, ...main.item_stats.map((s) => s.matches)), ...main }];
+  for (const s of found) {
+    const pop = await population(`&include_item_ids=${s.seed}`);
+    styles.push({ key: `style-${s.seed}`, seed: s.seed, anchors: s.anchors, exclude: [], matches: Math.max(0, ...pop.item_stats.map((s) => s.matches)), ...pop });
+  }
+  for (const s of styles) s.share = s.matches / N;
+  return { styles, scanned: cands.length };
+}
+
 async function fetchAnalytics(heroes, manifest) {
-  console.log(`4/5 per-hero analytics (${heroes.length} heroes, all ranks + badge>=${TOP_BADGE})`);
+  console.log(`4/5 per-hero analytics (${heroes.length} heroes, all ranks + badge>=${TOP_BADGE}, plus build styles)`);
+  const shopIds = new Set(JSON.parse(await readFile(path.join(OUT, 'items.json'), 'utf8')).filter((i) => i.shopable && !i.disabled && i.cost > 0).map((i) => i.id));
   for (const h of heroes) {
     const all = await fetchPopulation(h.id);
+    const topQ = `hero_id=${h.id}&min_unix_timestamp=${MIN_TS}&min_average_badge=${TOP_BADGE}`;
     const top = await fetchPopulation(h.id, `&min_average_badge=${TOP_BADGE}`);
     const topMatches = Math.max(0, ...top.item_stats.map((s) => s.matches));
-    console.log(`   ${h.name}: top-rank max item matches ${topMatches}`);
-    await save(`analytics/${h.id}.json`, { hero_id: h.id, ...all, top: { min_average_badge: TOP_BADGE, ...top } });
+    const { styles, scanned } = await fetchStyles(h, topQ, top, shopIds);
+    console.log(`   ${h.name}: top-rank max item matches ${topMatches}; ${scanned} anchors scanned, ${Math.max(0, styles.length - 1)} alternative style(s)${styles.length ? ': ' + styles.slice(1).map((s) => `${s.seed} ${(s.share * 100).toFixed(0)}%`).join(', ') : ''}`);
+    await save(`analytics/${h.id}.json`, { hero_id: h.id, ...all, top: { min_average_badge: TOP_BADGE, ...top, styles } });
   }
   manifest.counts.analytics_heroes = heroes.length;
   manifest.top_min_average_badge = TOP_BADGE;

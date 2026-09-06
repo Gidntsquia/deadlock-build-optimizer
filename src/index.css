@@ -142,6 +142,10 @@ footer { padding: 16px; font-size: 11px; opacity: .55; text-align: center; }
 .mode-switch { margin-left: auto; display: flex; background: rgba(0,0,0,.25); border-radius: 999px; padding: 3px; }
 .mode-switch button { min-height: 40px; padding: 0 14px; border-radius: 999px; font-weight: 800; color: var(--teal-ink); opacity: .75; }
 .mode-switch button.active { background: var(--board); opacity: 1; }
+.style-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 14px 0; }
+.style-tabs button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 48px; padding: 8px 14px; border-radius: 12px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); color: var(--navy-ink); font-weight: 800; }
+.style-tabs button.active { background: var(--teal); color: var(--teal-ink); border-color: transparent; }
+.style-tabs small { font-weight: 600; opacity: .8; font-size: 12px; }
 .brawl .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .brawl label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
 .brawl select, .brawl input[type=number] { min-height: 40px; background: rgba(255,255,255,.08); color: var(--navy-ink); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 4px 8px; font: inherit; max-width: 100%; }

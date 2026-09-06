@@ -113,3 +113,22 @@ export function validateAgainstPanel(build: Build, panel: { set: HeldoutSet; cor
     .sort((x, y) => y.reps - x.reps || y.frequency - x.frequency || x.item.id - y.item.id);
   return { players, agreement, consensusBadges, missingConsensus };
 }
+
+/**
+ * Panel agreement for a hero with several builds: each rep is scored against the build that fits them
+ * best (a rep who plays the hero's alternative style is compared with that style's build), then the
+ * per-rep scores are combined with the same selection-score weights as validateAgainstPanel.
+ */
+export function panelAgreementAcrossBuilds(builds: Build[], panel: { set: HeldoutSet; core: CoreSet }[]): { agreement: number; perRep: { player: string; buildKey: string; agreement: number }[] } {
+  if (!builds.length || !panel.length) return { agreement: 0, perRep: [] };
+  const vals = builds.map((b) => validateAgainstPanel(b, panel));
+  const perRep = panel.map((p, i) => {
+    let best = vals[0].players[i].validation.agreement, key = builds[0].key;
+    for (let k = 1; k < vals.length; k++) { const a = vals[k].players[i].validation.agreement; if (a > best) { best = a; key = builds[k].key; } }
+    return { player: p.set.player, buildKey: key, agreement: best };
+  });
+  const weights = panel.map((p) => (p.set.selection?.score ?? 0) > 0 ? p.set.selection!.score : NaN);
+  const w = weights.every((x) => Number.isFinite(x)) ? weights : panel.map(() => 1);
+  const totalW = w.reduce((a, b) => a + b, 0);
+  return { agreement: totalW ? perRep.reduce((a, r, i) => a + r.agreement * w[i], 0) / totalW : 0, perRep };
+}

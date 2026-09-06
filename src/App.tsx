@@ -72,6 +72,16 @@ export default function App() {
       </select>
       {mode === 'brawl' && <BrawlView hero={hero} heroes={heroes} items={items} abilities={abilities} onHero={setHeroId} />}
       {mode === 'build' && !analytics && <div className="loading">Generating builds…</div>}
+      {mode === 'build' && builds.length > 1 && (
+        <div className="style-tabs" role="tablist" aria-label="Build style">
+          {builds.map((b, i) => (
+            <button key={b.key} role="tab" aria-selected={i === tab} className={i === tab ? 'active' : ''} onClick={() => setTab(i)}>
+              <span>{b.name}</span>
+              <small>{b.population.style ? `${(b.population.style.share * 100).toFixed(0)}% of games` : ''}{validations[i] ? ` · ${(validations[i].agreement * 100).toFixed(0)}% panel` : ''}</small>
+            </button>
+          ))}
+        </div>
+      )}
       {mode === 'build' && builds.length > 0 && (
         <>
           {build && <BuildView key={`${heroId}-${build.key}`} build={build} panel={validations[tab] ?? null} heroName={hero.name} heroImage={img(hero.images.small)} fetchedAt={manifest?.fetched_at.slice(0, 10)} />}

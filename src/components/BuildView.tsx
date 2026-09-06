@@ -62,8 +62,10 @@ export function BuildView({ build, panel, heroName, heroImage, fetchedAt }: { bu
         <div className="board-foot"><span>{build.items.length} items</span><span className="souls">{fmtSouls(build.totalCost)}</span></div>
         <div className="source">
           {build.population.kind === 'top'
-            ? `Built from high-rank lobbies (average badge ${build.population.minBadge}+, Phantom and above), ${build.population.matches.toLocaleString()} matches.`
+            ? `Built from high-rank lobbies (average badge ${build.population.minBadge}+, Phantom and above), ${build.population.matches.toLocaleString()} matches${build.population.style ? ` played this way (${(build.population.style.share * 100).toFixed(0)}% of the hero's high-rank games)` : ''}.`
             : `Built from all ranks, ${build.population.matches.toLocaleString()} matches. Not enough high-rank games for this hero.`}
+          {build.population.style && build.population.style.seed && ` This hero has more than one established build; this one is the games where ${build.population.style.seed.name} was bought.`}
+          {build.population.style && !build.population.style.seed && ` This hero has more than one established build; this one leaves out games built around ${build.population.style.exclude.map((i) => i.name).join(', ')}.`}
         </div>
         {hasCore && (
           <div className="legend">

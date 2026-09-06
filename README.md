@@ -53,6 +53,9 @@ npm run verify               # Runs all the checks and prints the panel agreemen
 
 - A build for each of the 38 heroes, using the last 30 days of Phantom+ games.
   Heroes that don't have enough high-rank data use all ranks.
+- Heroes with two established ways to play (for example gun Warden and spirit Warden)
+  get one build per style, each optimised from the games played that way. The app
+  shows both as tabs with their share of high-rank games.
 - Items are ordered by the average time players buy them at.
 - The scoring weights were tuned against the panel below (`npx tsx scripts/tune.ts`),
   so the agreement numbers are a fit to that panel, not an out-of-sample forecast.
@@ -60,7 +63,7 @@ npm run verify               # Runs all the checks and prints the panel agreemen
 - Each build is checked against a panel of up to 5 top players per hero, chosen
   by recent Phantom+ games on the hero and weighted toward players with more
   lifetime games and more recent play. The app shows the panel's agreement
-  (the median across heroes is 70%, Infernus is at 75%) and lists the core items the panel buys that the build
+  (the median across heroes is 74%, Infernus is at 78%) and lists the core items the panel buys that the build
   is missing.
 - Street Brawl: the cards, round number, enemy heroes, and the items you've
   already picked are all read from the screen. Nothing is sent to the game.
@@ -76,6 +79,7 @@ More details in the
 
 - [Data Pipeline](../../wiki/Data-Pipeline) — what `fetch-data` downloads, rank filtering, rate limits
 - [How the Build Generator Works](../../wiki/How-the-Build-Generator-Works) — the scoring formula, buy order, ability order
+- [Build Styles](../../wiki/Build-Styles) — when a hero gets two builds and how each one is scored
 - [Held-out Validation](../../wiki/Held-out-Validation) — how the panel of up to 5 top players per hero is chosen and how agreement is measured
 - [Street Brawl Advisor](../../wiki/Street-Brawl-Advisor) — card scoring, re-roll math, the CLI
 - [Screen Reader](../../wiki/Screen-Reader) — how cards, round numbers, hero portraits and picks are recognized
