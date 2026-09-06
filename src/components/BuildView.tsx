@@ -6,13 +6,28 @@ import type { PersonalInsight } from '../personal';
 import { fmtSouls, fmtTime } from '../text';
 import { ItemCard } from './ItemCard';
 import { ItemTile } from './ItemTile';
+import { renderBuildPng } from '../export/png';
+import { downloadText, toGameBuild } from '../export/gameBuild';
 
 const PHASES: { key: Phase; label: string }[] = [{ key: 'early', label: 'Early Game' }, { key: 'mid', label: 'Mid Game' }, { key: 'late', label: 'Late Game' }];
 // Ability points spent per step, as the in-game board labels them: unlock is free, tiers cost 1 / 2 / 5.
 const AP_COST = { unlock: '', tier1: '1', tier2: '2', tier3: '5' } as const;
 
-export function BuildView({ build, validation, core, insight, heroName }: { build: Build; validation: BuildValidation | null; core: CoreSet | null; insight: PersonalInsight | null; heroName: string }) {
+export function BuildView({ build, validation, core, insight, heroName, heroImage, fetchedAt }: { build: Build; validation: BuildValidation | null; core: CoreSet | null; insight: PersonalInsight | null; heroName: string; heroImage?: string; fetchedAt?: string }) {
   const [open, setOpen] = useState<BuildItem | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const slug = `${heroName}-${build.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const sharePng = async () => {
+    setBusy('png');
+    try {
+      const blob = await renderBuildPng(build, { heroName, heroImage, img, fetchedAt });
+      const file = new File([blob], `${slug}.png`, { type: 'image/png' });
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+      if (nav.share && nav.canShare?.({ files: [file] })) { try { await nav.share({ files: [file], title: `${heroName}: ${build.name}` }); return; } catch { /* cancelled: fall through to download */ } }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) { alert(`PNG export failed: ${e}`); } finally { setBusy(null); }
+  };
+  const exportJson = () => downloadText(`${slug}.json`, JSON.stringify(toGameBuild(build, heroName, fetchedAt), null, 2));
   const budget = insight?.budget ?? Infinity;
   const abilities = [...new Map(build.abilityOrder.map((s) => [s.ability.id, s.ability])).values()];
   const steps = build.abilityOrder.length;
@@ -42,6 +57,10 @@ export function BuildView({ build, validation, core, insight, heroName }: { buil
           );
         })}
         <div className="board-foot"><span>{build.items.length} items</span><span className="souls">{fmtSouls(build.totalCost)}</span></div>
+        <div className="share">
+          <button className="btn primary" onClick={sharePng} disabled={busy === 'png'}>{busy === 'png' ? 'Rendering…' : 'Share as PNG'}</button>
+          <button className="btn" onClick={exportJson} title="Game hero-build JSON (the format api.deadlock-api.com/v1/builds serves)">Export game JSON</button>
+        </div>
         <div className="source">
           {build.population.kind === 'top'
             ? `Built from high-rank lobbies (average badge ${build.population.minBadge}+, Phantom and above), ${build.population.matches.toLocaleString()} matches.`

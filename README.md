@@ -362,3 +362,7 @@ self-hosted from `public/fonts` so the app still makes no network requests after
 Desktop: from 900 px wide the page fills the window, the hero strip wraps, and the board sits left of a
 sticky column with the ability order and the reports; tiles go to 6 per row (8 from 1400 px). The phone
 layout below 900 px is unchanged. The browser check screenshots both (`screenshots/desktop.png`).
+
+## Sharing a build
+
+Every build board has **Share as PNG** (renders the board and ability order to an image, using the phone share sheet where available, otherwise a download) and **Export game JSON** (the game's own hero-build format, as served by `api.deadlock-api.com/v1/builds`). The game has no import button for that JSON: it is the payload a Steam game-coordinator build upload takes, and the format community build sites accept.

@@ -72,7 +72,7 @@ export default function App() {
       {mode === 'build' && !analytics && <div className="loading">Generating builds…</div>}
       {mode === 'build' && builds.length > 0 && (
         <>
-          {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={core} insight={insight} heroName={hero.name} />}
+          {build && <BuildView key={`${heroId}-${build.key}`} build={build} validation={validations[tab] ?? null} core={core} insight={insight} heroName={hero.name} heroImage={img(hero.images.small)} fetchedAt={manifest?.fetched_at.slice(0, 10)} />}
         </>
       )}
       <footer>Data: deadlock-api.com (aggregate analytics, assets). Builds are generated deterministically from the local snapshot; see README for the scoring function.</footer>
