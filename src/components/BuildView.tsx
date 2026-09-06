@@ -7,7 +7,6 @@ import { fmtSouls, fmtTime } from '../text';
 import { ItemCard } from './ItemCard';
 import { ItemTile } from './ItemTile';
 import { renderBuildPng } from '../export/png';
-import { downloadText, toGameBuild } from '../export/gameBuild';
 
 const PHASES: { key: Phase; label: string }[] = [{ key: 'early', label: 'Early Game' }, { key: 'mid', label: 'Mid Game' }, { key: 'late', label: 'Late Game' }];
 // Ability points spent per step, as the in-game board labels them: unlock is free, tiers cost 1 / 2 / 5.
@@ -27,7 +26,6 @@ export function BuildView({ build, validation, core, insight, heroName, heroImag
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } catch (e) { alert(`PNG export failed: ${e}`); } finally { setBusy(null); }
   };
-  const exportJson = () => downloadText(`${slug}.json`, JSON.stringify(toGameBuild(build, heroName, fetchedAt), null, 2));
   const budget = insight?.budget ?? Infinity;
   const abilities = [...new Map(build.abilityOrder.map((s) => [s.ability.id, s.ability])).values()];
   const steps = build.abilityOrder.length;
@@ -39,8 +37,13 @@ export function BuildView({ build, validation, core, insight, heroName, heroImag
     <div className="layout">
       <div className="col-main">
       <div className="board">
-        <h2>{build.name}</h2>
-        <div className="muted">{build.tagline}</div>
+        <div className="board-head">
+          <div><h2>{build.name}</h2><div className="muted">{build.tagline}</div></div>
+          <button className="share-btn" onClick={sharePng} disabled={busy === 'png'} aria-label="Share build as image" title="Share build as image">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>
+            <span>{busy === 'png' ? 'Rendering…' : 'Share'}</span>
+          </button>
+        </div>
         {PHASES.map((p) => {
           const rows = build.items.filter((b) => b.phase === p.key);
           if (!rows.length) return null;
@@ -57,10 +60,6 @@ export function BuildView({ build, validation, core, insight, heroName, heroImag
           );
         })}
         <div className="board-foot"><span>{build.items.length} items</span><span className="souls">{fmtSouls(build.totalCost)}</span></div>
-        <div className="share">
-          <button className="btn primary" onClick={sharePng} disabled={busy === 'png'}>{busy === 'png' ? 'Rendering…' : 'Share as PNG'}</button>
-          <button className="btn" onClick={exportJson} title="Game hero-build JSON (the format api.deadlock-api.com/v1/builds serves)">Export game JSON</button>
-        </div>
         <div className="source">
           {build.population.kind === 'top'
             ? `Built from high-rank lobbies (average badge ${build.population.minBadge}+, Phantom and above), ${build.population.matches.toLocaleString()} matches.`

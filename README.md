@@ -365,4 +365,4 @@ layout below 900 px is unchanged. The browser check screenshots both (`screensho
 
 ## Sharing a build
 
-Every build board has **Share as PNG** (renders the board and ability order to an image, using the phone share sheet where available, otherwise a download) and **Export game JSON** (the game's own hero-build format, as served by `api.deadlock-api.com/v1/builds`). The game has no import button for that JSON: it is the payload a Steam game-coordinator build upload takes, and the format community build sites accept.
+The share button on a build board renders the board and ability order to a PNG and opens the phone share sheet where available, otherwise downloads the image. The game has no build import: builds only reach the client through the Steam game coordinator, so a build still has to be entered by hand in the in-game editor.

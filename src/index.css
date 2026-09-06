@@ -64,9 +64,9 @@ h1, h2, h3 { margin: 0; font-weight: 800; }
 .board-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 6px 4px 0; font-weight: 800; }
 .souls { display: inline-flex; align-items: center; gap: 5px; }
 .souls::before { content: ""; width: 12px; height: 16px; background: currentColor; border-radius: 6px 6px 6px 6px / 8px 8px 8px 8px; clip-path: polygon(50% 0, 100% 25%, 65% 50%, 100% 75%, 50% 100%, 0 75%, 35% 50%, 0 25%); }
-.share { display: flex; gap: 8px; margin-top: 10px; padding: 0 4px; }
-.share .btn { min-height: 44px; font-size: 13px; }
-.share .btn:not(.primary) { color: var(--ink); border-color: var(--board-edge); background: rgba(0,0,0,.06); }
+.board-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.share-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; color: var(--ink); background: rgba(0,0,0,.07); border: 1px solid var(--board-edge); font-weight: 800; font-size: 13px; }
+.share-btn:disabled { opacity: .6; }
 .source { margin-top: 6px; padding: 0 4px; font-size: 12px; color: var(--ink-soft); }
 .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
 .legend span { display: inline-flex; align-items: center; gap: 4px; }
