@@ -21,9 +21,9 @@ Per item base score (0..1), weights in `WEIGHTS`:
 
 | term | weight | input |
 |---|---|---|
-| win rate | 0.30 | item-stats wins/matches, Bayesian-smoothed (k=200) toward the hero baseline, ±8 pts = full range |
-| usage | 0.40 | item matches / most-bought item's matches, saturating at 50% |
-| stat value per soul | 0.10 | weighted stat sum (`STAT_WORTH`) per 1000 souls, percentile within slot type |
+| win rate | 0.20 | item-stats wins/matches, Bayesian-smoothed (k=200) toward the hero baseline, ±15 pts = full range |
+| usage | 0.50 | item matches / most-bought item's matches, saturating at 50% |
+| stat value per soul | 0 | weighted stat sum (`STAT_WORTH`) per 1000 souls, percentile within slot type |
 | synergy | 0.10 | 60% kit (spirit-scaling of the 4 abilities, gun DPS, vitality default) + 40% per-level stat growth; +0.3×bullet-proc factor for fire-rate items (Infernus: burn builds up on bullet hits) |
 | utility | 0.05 | active item = 1, passive effect = 0.5 |
 
@@ -34,7 +34,7 @@ Ability order: among ability-order-stats sequences with enough matches, pick the
 Same snapshot → identical builds (`npm test` checks this for every hero).
 
 ## Validation (`src/validation/`)
-Held-out; runs after builds exist. From Zergggy's 30 most recent real (Unranked/Ranked, Normal mode) Infernus matches: an item counts in a match if bought and held ≥5 min or never sold. **Core set = items whose weighted share of matches is ≥30%** (wins weigh 1.5, losses 1). Items below 30% are his experiments and excluded. Agreement = 0.7 × F1(build items, core set) + 0.3 × pairwise buy-order agreement on shared items. The app shows per-item core/not-core badges, a % per build, and the core items missed. Usage and win-rate weights were raised (and stat value lowered) after a small sweep against this score, so the agreement figure is optimistic: 30 matches from one player is a small target.
+Held-out; runs after builds exist. From Zergggy's 30 most recent real (Unranked/Ranked, Normal mode) Infernus matches: an item counts in a match if bought and held ≥5 min or never sold. **Core set = items whose weighted share of matches is ≥30%** (wins weigh 1.5, losses 1). Items below 30% are his experiments and excluded. Agreement = 0.7 × F1(build items, core set) + 0.3 × pairwise buy-order agreement on shared items. The app shows per-item core/not-core badges, a % per build, and the core items missed. Weights were tuned by a small sweep against five samples (Zergggy Infernus, Deathy Lash, and three players' Mina, 30 matches each; mean agreement 63% → 71%, Infernus 59% → 63%, Lash 68% → 73%, Mina 57–70% → 73–75%). The same samples were used to tune and to score, so the figures are optimistic.
 
 ## Personalization
 User `267836488` standard-mode history: median match length × median souls/min (clamped 700–1300) sets the late-game budget (clamped 28k–48k; default 35k). Toggle in the UI.
@@ -44,4 +44,4 @@ User `267836488` standard-mode history: median match length × median souls/min 
 - `assets.deadlock-api.com` did not resolve from my machine; the script falls back to the same data at `api.deadlock-api.com/v1/assets` (recorded in `manifest.json`).
 - Item-stats are not filtered by rank or patch (API defaults).
 - Validation badges appear for Infernus only.
-- Core set is broad (23 items at ≥30%), so agreement tops out near 60%.
+- Core set is broad (23 items at ≥30%), so agreement tops out near 75%.

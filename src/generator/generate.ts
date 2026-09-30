@@ -8,14 +8,14 @@ import { kitProfile, type KitProfile } from './kit.ts';
 
 // ---------------------------------------------------------------- weights (documented in README)
 export const WEIGHTS = {
-  winRate: 0.3,
-  usage: 0.4,
-  statValue: 0.1,
+  winRate: 0.2,
+  usage: 0.5,
+  statValue: 0,
   synergy: 0.1,
   utility: 0.05,
   pairLift: 0.1, // marginal bonus from permutation stats, added during greedy selection
   smoothingK: 200, // Bayesian prior strength (matches) for win rates
-  winRateRange: 0.08, // ±8 points vs hero baseline maps to the full 0..1 range
+  winRateRange: 0.15, // ±8 points vs hero baseline maps to the full 0..1 range
   usageSaturation: 0.5, // pick rate at which the usage score saturates
   minPickRate: 0.004, // items picked in <0.4% of hero matches are ignored
   minPairMatches: 100,
