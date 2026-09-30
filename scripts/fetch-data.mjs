@@ -12,6 +12,8 @@ const API = 'https://api.deadlock-api.com';
 const ASSETS = 'https://assets.deadlock-api.com';
 const ZERGGGY = 35187362;
 const USER = 267836488;
+const MIN_BADGE = 70; // Phantom+ average badge
+const MIN_SLICE_MATCHES = 4000;
 const SLEEP_MS = 350; // analytics limit is 200 req/min per IP; this stays under ~170/min
 const ZERG_MATCHES = 30;
 const REAL_MATCH_MODES = new Set([1, 4]); // 1 = Unranked, 4 = Ranked (2 private lobby, 3 bots, 7 hero labs excluded)
@@ -166,14 +168,25 @@ async function main() {
   // ---- per-hero analytics ----
   log('Analytics…');
   for (const h of heroes) {
-    const q = `hero_id=${h.id}`;
-    const itemStats = await getJson(`${API}/v1/analytics/item-stats?${q}`);
+    // Top-player slice: only matches whose average rank badge >= MIN_BADGE. Falls back to all ranks for thin heroes.
+    let q = `hero_id=${h.id}&min_average_badge=${MIN_BADGE}`;
+    let itemStats = await getJson(`${API}/v1/analytics/item-stats?${q}`);
     await sleep(SLEEP_MS);
-    const abilityOrder = await getJson(`${API}/v1/analytics/ability-order-stats?${q}`);
+    let abilityOrder = await getJson(`${API}/v1/analytics/ability-order-stats?${q}`);
     await sleep(SLEEP_MS);
+    let slice = `badge>=${MIN_BADGE}`;
+    if (abilityOrder.reduce((t, r) => t + r.matches, 0) < MIN_SLICE_MATCHES) {
+      q = `hero_id=${h.id}`;
+      itemStats = await getJson(`${API}/v1/analytics/item-stats?${q}`);
+      await sleep(SLEEP_MS);
+      abilityOrder = await getJson(`${API}/v1/analytics/ability-order-stats?${q}`);
+      await sleep(SLEEP_MS);
+      slice = 'all ranks';
+      log(`  ${h.name}: too few top-rank matches, using all ranks`);
+    }
     let perms = [];
     try {
-      perms = await getJson(`${API}/v1/analytics/item-permutation-stats?${q}&comb_size=2&min_matches=300`);
+      perms = await getJson(`${API}/v1/analytics/item-permutation-stats?${q}&comb_size=2&min_matches=100`);
     } catch (e) {
       log(`  permutation stats failed for ${h.name}: ${e.message}`);
     }
@@ -184,7 +197,7 @@ async function main() {
     abilityOrder.sort((a, b) => b.matches - a.matches);
     perms.sort((a, b) => b.matches - a.matches);
     await writeJson(`analytics/${h.id}.json`, {
-      hero_id: h.id, hero_matches: heroMatches, hero_wins: heroWins,
+      hero_id: h.id, slice, hero_matches: heroMatches, hero_wins: heroWins,
       item_stats: itemStats.filter((r) => r.matches > 0).map((r) => ({
         item_id: r.item_id, wins: r.wins, losses: r.losses, matches: r.matches, players: r.players,
         avg_buy_time_s: r.avg_buy_time_s, avg_sell_time_s: r.avg_sell_time_s,

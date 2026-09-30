@@ -8,17 +8,17 @@ import { kitProfile, type KitProfile } from './kit.ts';
 
 // ---------------------------------------------------------------- weights (documented in README)
 export const WEIGHTS = {
-  winRate: 0.35,
-  usage: 0.2,
-  statValue: 0.2,
-  synergy: 0.15,
-  utility: 0.1,
+  winRate: 0.3,
+  usage: 0.4,
+  statValue: 0.1,
+  synergy: 0.1,
+  utility: 0.05,
   pairLift: 0.1, // marginal bonus from permutation stats, added during greedy selection
   smoothingK: 200, // Bayesian prior strength (matches) for win rates
   winRateRange: 0.08, // ±8 points vs hero baseline maps to the full 0..1 range
   usageSaturation: 0.5, // pick rate at which the usage score saturates
   minPickRate: 0.004, // items picked in <0.4% of hero matches are ignored
-  minPairMatches: 300,
+  minPairMatches: 100,
 };
 
 export const TIER_QUOTAS: Record<number, number> = { 1: 2, 2: 3, 3: 2, 4: 2 };
@@ -62,20 +62,10 @@ export interface Archetype {
   abilityBias: number;
 }
 
-export const ARCHETYPES: Archetype[] = [
-  {
-    id: 'gun', name: 'Gun Carry', tagline: 'Weapon damage and fire rate first, vitality to survive, light spirit.',
-    slotWeight: { weapon: 1, vitality: 0.6, spirit: 0.3 }, slotCap: { weapon: 6, vitality: 4, spirit: 3 }, abilityBias: -1,
-  },
-  {
-    id: 'spirit', name: 'Spirit Burn', tagline: 'Spirit power, cooldowns and burn scaling first, vitality to survive.',
-    slotWeight: { weapon: 0.3, vitality: 0.6, spirit: 1 }, slotCap: { weapon: 3, vitality: 4, spirit: 6 }, abilityBias: 1,
-  },
-  {
-    id: 'bruiser', name: 'Frontline Bruiser', tagline: 'Vitality-heavy with a balanced weapon/spirit split.',
-    slotWeight: { weapon: 0.6, vitality: 1, spirit: 0.6 }, slotCap: { weapon: 4, vitality: 6, spirit: 4 }, abilityBias: 0,
-  },
-];
+export const ARCHETYPE: Archetype = {
+  id: 'top', name: 'Top-player build', tagline: 'What high-rank players buy and win with on this hero.',
+  slotWeight: { weapon: 1, vitality: 1, spirit: 1 }, slotCap: { weapon: 6, vitality: 6, spirit: 6 }, abilityBias: 0,
+};
 
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
 const num = (v: unknown) => {
@@ -262,18 +252,16 @@ function abilityOrder(hero: Hero, analytics: HeroAnalytics, arch: Archetype, kit
   return { steps, unlock, wr: best ? best.wins / best.matches : 0, matches: best?.matches ?? 0 };
 }
 
-export function generateBuilds(hero: Hero, catalog: Item[], analytics: HeroAnalytics, options: GeneratorOptions): Build[] {
+export function generateBuild(hero: Hero, catalog: Item[], analytics: HeroAnalytics, options: GeneratorOptions): Build {
   const kit = kitProfile(hero);
   const scored = scoreItems(hero, catalog, analytics, kit);
   const lifts = pairLifts(analytics, scored);
-  return ARCHETYPES.map((arch) => {
-    const chosen = selectItems(arch, scored, lifts, options.budget);
-    const items = orderAndPhase(chosen, options.budget);
-    const ab = abilityOrder(hero, analytics, arch, kit);
-    return {
-      id: arch.id, name: arch.name, tagline: arch.tagline, hero_id: hero.id, items,
-      total_cost: items.length ? items[items.length - 1].running_total : 0, budget: options.budget,
-      ability_steps: ab.steps, unlock_order: ab.unlock, ability_win_rate: ab.wr, ability_matches: ab.matches,
-    };
-  });
+  const chosen = selectItems(ARCHETYPE, scored, lifts, options.budget);
+  const items = orderAndPhase(chosen, options.budget);
+  const ab = abilityOrder(hero, analytics, ARCHETYPE, kit);
+  return {
+    id: ARCHETYPE.id, name: ARCHETYPE.name, tagline: ARCHETYPE.tagline, hero_id: hero.id, items,
+    total_cost: items.length ? items[items.length - 1].running_total : 0, budget: options.budget,
+    ability_steps: ab.steps, unlock_order: ab.unlock, ability_win_rate: ab.wr, ability_matches: ab.matches,
+  };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Build, Hero, HeroAnalytics, Item } from './types.ts';
 import { loadAnalytics, loadHeroes, loadItems, loadManifest, BASE } from './data.ts';
-import { generateBuilds } from './generator/generate.ts';
+import { generateBuild } from './generator/generate.ts';
 import { computeCoreSet, loadZergSnapshot, validateBuild, type CoreSet } from './validation/validate.ts';
 import { DEFAULT_BUDGET } from './personalize.ts';
 import { HeroPicker } from './components/HeroPicker.tsx';
@@ -18,7 +18,6 @@ export default function App() {
   const [analytics, setAnalytics] = useState<HeroAnalytics | null>(null);
   const [core, setCore] = useState<CoreSet | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [buildId, setBuildId] = useState('gun');
   const [openItem, setOpenItem] = useState<{ item: Item; build: Build } | null>(null);
 
   useEffect(() => {
@@ -47,15 +46,14 @@ export default function App() {
   const hero = heroes?.find((h) => h.id === heroId) ?? null;
   const budget = DEFAULT_BUDGET;
 
-  const builds = useMemo(() => {
+  const build = useMemo(() => {
     if (!hero || !items || !analytics || analytics.hero_id !== hero.id) return null;
-    return generateBuilds(hero, items, analytics, { budget });
+    return generateBuild(hero, items, analytics, { budget });
   }, [hero, items, analytics, budget]);
 
-  const build = builds?.find((b) => b.id === buildId) ?? builds?.[0] ?? null;
-  const validations = useMemo(
-    () => (heroId === INFERNUS && core && builds ? new Map(builds.map((b) => [b.id, validateBuild(b, core)])) : null),
-    [heroId, core, builds],
+  const validation = useMemo(
+    () => (heroId === INFERNUS && core && build ? validateBuild(build, core) : null),
+    [heroId, core, build],
   );
 
   if (error) return <main className="page"><p className="error" role="alert">{error}</p></main>;
@@ -65,32 +63,22 @@ export default function App() {
     <main className="page">
       <header className="top">
         <h1>Deadlock Build Optimizer</h1>
-        {hero && <HeroPicker heroes={heroes} current={hero} onPick={(id) => { setHeroId(id); setBuildId('gun'); }} />}
+        {hero && <HeroPicker heroes={heroes} current={hero} onPick={(id) => { setHeroId(id); }} />}
         {fetchedAt && <p className="muted small">Data snapshot: {fetchedAt.slice(0, 10)}</p>}
       </header>
 
-      {!builds || !build || !hero ? (
-        <p className="muted">Generating builds…</p>
+      {!build || !hero ? (
+        <p className="muted">Generating build…</p>
       ) : (
-        <>
-          <div className="tabs" role="tablist" aria-label="Builds">
-            {builds.map((b) => (
-              <button key={b.id} role="tab" aria-selected={b.id === build.id} className={b.id === build.id ? 'tab on' : 'tab'} onClick={() => setBuildId(b.id)}>
-                <span>{b.name}</span>
-                {validations?.get(b.id) && <small>{Math.round(validations.get(b.id)!.agreement * 100)}%</small>}
-              </button>
-            ))}
-          </div>
-          <BuildView
-            build={build} hero={hero} items={items} validation={validations?.get(build.id) ?? null}
-            core={heroId === INFERNUS ? core : null} onOpen={(item) => setOpenItem({ item, build })}
-          />
-        </>
+        <BuildView
+          build={build} hero={hero} items={items} validation={validation}
+          core={heroId === INFERNUS ? core : null} onOpen={(item) => setOpenItem({ item, build })}
+        />
       )}
       {openItem && (
         <ItemCard
           item={openItem.item} build={openItem.build}
-          validation={validations?.get(openItem.build.id) ?? null} onClose={() => setOpenItem(null)}
+          validation={validation} onClose={() => setOpenItem(null)}
         />
       )}
     </main>
