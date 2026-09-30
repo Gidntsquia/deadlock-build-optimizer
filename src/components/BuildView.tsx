@@ -3,6 +3,8 @@ import type { BuildValidation, CoreSet } from '../validation/validate.ts';
 import { asset } from '../data.ts';
 import { pct } from '../text.ts';
 
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+
 const PHASES: { id: Phase; label: string; hint: string }[] = [
   { id: 'early', label: 'Early game', hint: 'Lane & first 10 minutes' },
   { id: 'mid', label: 'Mid game', hint: 'Transition & objectives' },
@@ -38,25 +40,21 @@ export function BuildView({ build, hero, items, validation, core, onOpen }: {
         const list = build.items.filter((i) => i.phase === ph.id);
         if (!list.length) return null;
         return (
-          <div key={ph.id} className="phase">
-            <h2>{ph.label} <small>{ph.hint}</small></h2>
+          <div key={ph.id} className="phase panel">
+            <h2 className="bar-head">{ph.label} <small>{ph.hint}</small></h2>
             <ol className="items">
               {list.map((bi) => {
                 const it = byId.get(bi.item_id)!;
                 const v = validation?.per_item.get(bi.item_id);
                 return (
                   <li key={bi.item_id}>
-                    <button className="item" onClick={() => onOpen(it)} aria-label={`${it.name}, ${it.cost} souls. Open details`}>
-                      <img className={`shop slot-${it.item_slot_type}`} src={asset(it.image)} alt={`${it.name} shop icon`} width={48} height={48} />
-                      <span className="meta">
-                        <span className="name">{it.name}</span>
-                        <span className="sub">T{it.item_tier} · {it.item_slot_type}{it.is_active_item ? ' · active' : ''}</span>
-                      </span>
-                      <span className="cost">
-                        <b>{it.cost.toLocaleString()}</b>
-                        <small>Σ {bi.running_total.toLocaleString()}</small>
-                      </span>
-                      {v && <span className={v.core ? 'badge core' : 'badge exp'}>{v.core ? 'core' : 'not core'}</span>}
+                    <button className={`tile slot-${it.item_slot_type}`} onClick={() => onOpen(it)} aria-label={`${it.name}, ${it.cost} souls. Open details`}>
+                      <span className="tier" aria-hidden>{ROMAN[it.item_tier] ?? it.item_tier}</span>
+                      <img src={asset(it.image)} alt="" width={64} height={64} />
+                      {it.is_active_item && <span className="active-tag">Active</span>}
+                      <span className="tile-name">{it.name}</span>
+                      <span className="tile-cost">{it.cost.toLocaleString()}</span>
+                      {v && <span className={v.core ? 'dot core' : 'dot exp'} title={v.core ? 'Core item' : 'Not core'} />}
                     </button>
                   </li>
                 );
@@ -66,8 +64,8 @@ export function BuildView({ build, hero, items, validation, core, onOpen }: {
         );
       })}
 
-      <div className="phase">
-        <h2>Ability order <small>{hero.name}</small></h2>
+      <div className="phase panel">
+        <h2 className="bar-head">Ability Point Order <small>{hero.name}</small></h2>
         <AbilityOrder build={build} hero={hero} />
       </div>
 
@@ -80,34 +78,29 @@ function AbilityOrder({ build, hero }: { build: Build; hero: Hero }) {
   const order = build.unlock_order;
   const abilities = order.map((n) => hero.abilities.find((a) => a.name === n)!).filter(Boolean);
   return (
-    <div>
-      <p className="muted small">Unlock order: {order.map((n, i) => `${i + 1}. ${n}`).join('  ')}</p>
-      <ul className="abilities">
+    <div className="ap">
+      <div className="ap-grid">
         {abilities.map((a) => {
           const steps = build.ability_steps.filter((s) => s.ability_id === a.id);
           return (
-            <li key={a.id}>
-              <div className="ab-head">
-                {a.image && <img src={asset(a.image)} alt="" width={32} height={32} />}
-                <span>{a.name}</span>
-              </div>
-              <div className="ranks">
-                {[1, 2, 3, 4].map((r) => {
-                  const s = steps.find((x) => x.rank === r);
-                  return (
-                    <span key={r} className="rank" title={r === 1 ? 'Unlock' : `Upgrade tier ${r - 1}`}>
-                      <small>{r === 1 ? 'Unlock' : `Tier ${r - 1}`}</small>
-                      <b>{s ? `#${s.step}` : '–'}</b>
-                    </span>
-                  );
-                })}
-              </div>
-            </li>
+            <div key={a.id} className="ap-row">
+              <span className="ap-icon" title={a.name}>{a.image ? <img src={asset(a.image)} alt={a.name} width={34} height={34} /> : a.name}</span>
+              {Array.from({ length: 16 }, (_, i) => {
+                const s = steps.find((x) => x.step === i + 1);
+                return (
+                  <span key={i} className="ap-cell">
+                    {s && (s.rank === 1
+                      ? <b className="pip unlock" title={`Step ${s.step}: unlock ${a.name}`}>⚡</b>
+                      : <b className="pip" title={`Step ${s.step}: ${a.name} tier ${s.rank - 1}`}>◆{s.rank - 1}</b>)}
+                  </span>
+                );
+              })}
+            </div>
           );
         })}
-      </ul>
+      </div>
       <p className="muted small">
-        Numbers are the level-up step (1–16). Sequence played in {build.ability_matches.toLocaleString()} matches, {pct(build.ability_win_rate, 1)} wins.
+        Columns are level-up steps 1–16. Played in {build.ability_matches.toLocaleString()} matches, {pct(build.ability_win_rate, 1)} wins.
       </p>
     </div>
   );
