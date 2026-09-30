@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Build, Hero, HeroAnalytics, Item } from './types.ts';
-import { loadAnalytics, loadHeroes, loadItems, loadManifest, loadUserHistory, BASE } from './data.ts';
+import { loadAnalytics, loadHeroes, loadItems, loadManifest, BASE } from './data.ts';
 import { generateBuilds } from './generator/generate.ts';
 import { computeCoreSet, loadZergSnapshot, validateBuild, type CoreSet } from './validation/validate.ts';
-import { DEFAULT_BUDGET, userInsight, type UserHistory } from './personalize.ts';
+import { DEFAULT_BUDGET } from './personalize.ts';
 import { HeroPicker } from './components/HeroPicker.tsx';
 import { BuildView } from './components/BuildView.tsx';
 import { ItemCard } from './components/ItemCard.tsx';
@@ -13,22 +13,19 @@ const INFERNUS = 1;
 export default function App() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [heroes, setHeroes] = useState<Hero[] | null>(null);
-  const [history, setHistory] = useState<UserHistory | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [heroId, setHeroId] = useState(INFERNUS);
   const [analytics, setAnalytics] = useState<HeroAnalytics | null>(null);
   const [core, setCore] = useState<CoreSet | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [personal, setPersonal] = useState(true);
   const [buildId, setBuildId] = useState('gun');
   const [openItem, setOpenItem] = useState<{ item: Item; build: Build } | null>(null);
 
   useEffect(() => {
-    Promise.all([loadItems(), loadHeroes(), loadUserHistory(), loadManifest()])
-      .then(([i, h, u, m]) => {
+    Promise.all([loadItems(), loadHeroes(), loadManifest()])
+      .then(([i, h, m]) => {
         setItems(i);
         setHeroes(h);
-        setHistory(u);
         setFetchedAt(m?.fetched_at ?? null);
       })
       .catch((e) => setError(String(e.message ?? e)));
@@ -48,8 +45,7 @@ export default function App() {
   }, [items]);
 
   const hero = heroes?.find((h) => h.id === heroId) ?? null;
-  const insight = useMemo(() => userInsight(history, heroId), [history, heroId]);
-  const budget = personal && insight ? insight.budget : DEFAULT_BUDGET;
+  const budget = DEFAULT_BUDGET;
 
   const builds = useMemo(() => {
     if (!hero || !items || !analytics || analytics.hero_id !== hero.id) return null;
@@ -72,16 +68,6 @@ export default function App() {
         {hero && <HeroPicker heroes={heroes} current={hero} onPick={(id) => { setHeroId(id); setBuildId('gun'); }} />}
         {fetchedAt && <p className="muted small">Data snapshot: {fetchedAt.slice(0, 10)}</p>}
       </header>
-
-      {insight && (
-        <section className="insight" aria-label="Personal insight">
-          <p>{insight.text}{insight.hero_matches > 0 && ` You have ${insight.hero_matches} ${hero?.name} matches (${Math.round((insight.hero_win_rate ?? 0) * 100)}% wins).`}</p>
-          <label className="toggle">
-            <input type="checkbox" checked={personal} onChange={(e) => setPersonal(e.target.checked)} />
-            <span>Use my match length for the budget</span>
-          </label>
-        </section>
-      )}
 
       {!builds || !build || !hero ? (
         <p className="muted">Generating builds…</p>
